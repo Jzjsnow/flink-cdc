@@ -39,6 +39,7 @@ public class SinkDef {
     private final String type;
     @Nullable private final String name;
     private final Configuration config;
+    public static final String PASSWORD = "password";
 
     public SinkDef(String type, @Nullable String name, Configuration config) {
         this.type = type;

@@ -21,6 +21,7 @@ import com.ververica.cdc.common.configuration.Configuration;
 import com.ververica.cdc.common.types.LocalZonedTimestampType;
 
 import java.time.ZoneId;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
 import java.util.TimeZone;
@@ -53,6 +54,7 @@ public class PipelineDef {
     private final List<RouteDef> routes;
     private final List<TransformDef> transforms;
     private final Configuration config;
+    private boolean isEncrypted = false;
 
     public PipelineDef(
             List<SourceDef> sources,
@@ -67,8 +69,34 @@ public class PipelineDef {
         this.config = evaluatePipelineTimeZone(config);
     }
 
+    public PipelineDef(
+            SourceDef sourceDef,
+            SinkDef sink,
+            List<RouteDef> routes,
+            List<TransformDef> transforms,
+            Configuration config) {
+        List<SourceDef> sourceDefs = new ArrayList<>();
+        sourceDefs.add(sourceDef);
+        this.sources = sourceDefs;
+        this.sink = sink;
+        this.routes = routes;
+        this.transforms = transforms;
+        this.config = evaluatePipelineTimeZone(config);
+    }
+
     public List<SourceDef> getSources() {
         return sources;
+    }
+
+    public PipelineDef(
+            List<SourceDef> source,
+            SinkDef sink,
+            List<RouteDef> routes,
+            List<TransformDef> transforms,
+            Configuration config,
+            boolean isEncrypted) {
+        this(source, sink, routes, transforms, config);
+        this.isEncrypted = isEncrypted;
     }
 
     public SinkDef getSink() {
@@ -85,6 +113,10 @@ public class PipelineDef {
 
     public Configuration getConfig() {
         return config;
+    }
+
+    public boolean getIsEncrypted() {
+        return isEncrypted;
     }
 
     @Override

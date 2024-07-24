@@ -56,28 +56,31 @@ public class CliFrontendOptions {
             Option.builder("s")
                     .longOpt("from-savepoint")
                     .hasArg(true)
-                    .desc("Path to a savepoint to restore the job from (for example hdfs:///flink/savepoint-1537")
+                    .desc(
+                            "Path to a savepoint to restore the job from (for example hdfs:///flink/savepoint-1537")
                     .build();
 
     public static final Option SAVEPOINT_CLAIM_MODE =
             Option.builder("cm")
                     .longOpt("claim-mode")
                     .hasArg(true)
-                    .desc("Defines how should we restore from the given savepoint. Supported options: "
-                            + "[claim - claim ownership of the savepoint and delete once it is"
-                            + " subsumed, no_claim (default) - do not claim ownership, the first"
-                            + " checkpoint will not reuse any files from the restored one, legacy "
-                            + "- the old behaviour, do not assume ownership of the savepoint files,"
-                            + " but can reuse some shared files")
+                    .desc(
+                            "Defines how should we restore from the given savepoint. Supported options: "
+                                    + "[claim - claim ownership of the savepoint and delete once it is"
+                                    + " subsumed, no_claim (default) - do not claim ownership, the first"
+                                    + " checkpoint will not reuse any files from the restored one, legacy "
+                                    + "- the old behaviour, do not assume ownership of the savepoint files,"
+                                    + " but can reuse some shared files")
                     .build();
 
     public static final Option SAVEPOINT_ALLOW_NON_RESTORED_OPTION =
             Option.builder("n")
                     .longOpt("allow-nonRestored-state")
                     .hasArg(false)
-                    .desc("Allow to skip savepoint state that cannot be restored. "
-                            + "You need to allow this if you removed an operator from your "
-                            + "program that was part of the program when the savepoint was triggered.")
+                    .desc(
+                            "Allow to skip savepoint state that cannot be restored. "
+                                    + "You need to allow this if you removed an operator from your "
+                                    + "program that was part of the program when the savepoint was triggered.")
                     .build();
 
     public static Options initializeOptions() {

@@ -1,0 +1,46 @@
+################################################################################
+# Copyright 2023 Ververica Inc.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#    http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+################################################################################
+source:
+  type: mysql
+  name: source-database
+  hostname: localhost
+  port: 3306
+  username: admin
+  password: VOwb9s4PzNs6lOEq7KiHOuMgjBocMd+RS2nD0h9YnF3OC6Sr7S5nDyJMn511903r+WbcmEu26rT7R4U92s/29ZfpgiEhaj77y0SxALihjqfNhBoFzO8Q4ZT8XeZtbUmyzxhSJnZXqy0N6b+0IcuJv5oiyqeGZmj4uONOMU3Ov4yiH0GBn0LP/IvbRUmWryB9FB0A5HRxOXWZkyNtvWRvEwIzYI504iujs7Buut0hVMceuQ/n+xE+9ehx7nnyg53qjmSbiTBJqHazZHFiv74E3sg2B4vv3hqk45QGrSHddcLA5tFonUzhYxFow9U6ENCEe11AasXmHRf/PmBd1gb1gQ==
+  tables: replication.cluster
+  server-id: 5400-5404
+  server-time-zone: Asia/Shanghai
+
+route:
+  - source-table: replication.cluster
+    sink-table: test.cluster
+    description: sync table to one destination table
+
+
+sink:
+  type: doris
+  name: sink-queue
+  fenodes: localhost:8035
+  username: root
+  password: NhD3g3hcrPIW/Bxuxf3HnWWN5cQp0PyA5+TV+d3/0IERKcyQuOTT0pfq9H+2gp54hvLPC+XlNHPZnJS4XU5WZ6BeUgxLx9xBVZ1+A1iEwwYvxRl5BkXpetuataSnH/UOUbkWJGuUk7224y3GoNHpV0rUb7SFuJHj8X+BYqDco0kx9dwnXevmyXq+DlmmzjutQrnfdeOOXf6/1sul85+9sJqXQGeIjxu8Nj0v/G8ZFm0slcGULmS7nX1kYlLHxhlk+tK8eNjAF+XDWkOHC2s1j8uGg1wBEa0Qu6v/4DoE3iQkncGnf/UaiuGy9tSQDijSgdmroltHwFpYFoC1zvyFMg==
+  table.create.properties.light_schema_change: true
+  table.create.properties.replication_num: 1
+
+pipeline:
+  name: Sync MySQL Database to Doris
+  parallelism: 2
+  jasypt-encryptor.enabled: true
+  jasypt-encryptor.private-key-format: DER
+  jasypt-encryptor.private-key-location: src/test/resources/private_key.der

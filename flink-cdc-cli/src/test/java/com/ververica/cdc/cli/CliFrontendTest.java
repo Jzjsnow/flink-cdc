@@ -16,12 +16,13 @@
 
 package com.ververica.cdc.cli;
 
+import org.apache.flink.runtime.jobgraph.RestoreMode;
+
 import org.apache.flink.shaded.guava30.com.google.common.io.Resources;
 
 import com.ververica.cdc.composer.PipelineComposer;
 import com.ververica.cdc.composer.PipelineExecution;
 import com.ververica.cdc.composer.definition.PipelineDef;
-import org.apache.flink.runtime.jobgraph.RestoreMode;
 import org.apache.commons.cli.CommandLineParser;
 import org.apache.commons.cli.DefaultParser;
 import org.apache.commons.cli.Options;

@@ -84,5 +84,29 @@ public class PipelineOptions {
                     .withDescription(
                             "The unique ID for schema operator. This ID will be used for inter-operator communications and must be unique across operators.");
 
+    public static final ConfigOption<Boolean> ENCRYPTOR_ENABLED =
+            ConfigOptions.key("jasypt-encryptor.enabled")
+                    .booleanType()
+                    .defaultValue(false)
+                    .withDescription("Whether to enable encryptor.");
+
+    public static final ConfigOption<String> ENCRYPTOR_PRIVATE_KEY_FORMAT =
+            ConfigOptions.key("jasypt-encryptor.private-key-format")
+                    .stringType()
+                    .defaultValue("DER")
+                    .withDescription("The format of private key, DER or PEM.");
+
+    public static final ConfigOption<String> ENCRYPTOR_PRIVATE_KEY_STRING =
+            ConfigOptions.key("jasypt-encryptor.private-key-string")
+                    .stringType()
+                    .defaultValue("")
+                    .withDescription("The private key for decryption in String format.");
+
+    public static final ConfigOption<String> ENCRYPTOR_PRIVATE_KEY_LOCATION =
+            ConfigOptions.key("jasypt-encryptor.private-key-location")
+                    .stringType()
+                    .defaultValue("")
+                    .withDescription("The location of the private key for decryption.");
+
     private PipelineOptions() {}
 }

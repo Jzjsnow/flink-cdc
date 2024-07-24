@@ -1,0 +1,46 @@
+################################################################################
+# Copyright 2023 Ververica Inc.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#    http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+################################################################################
+source:
+  type: mysql
+  name: source-database
+  hostname: localhost
+  port: 3306
+  username: admin
+  password: VOwb9s4PzNs6lOEq7KiHOuMgjBocMd+RS2nD0h9YnF3OC6Sr7S5nDyJMn511903r+WbcmEu26rT7R4U92s/29ZfpgiEhaj77y0SxALihjqfNhBoFzO8Q4ZT8XeZtbUmyzxhSJnZXqy0N6b+0IcuJv5oiyqeGZmj4uONOMU3Ov4yiH0GBn0LP/IvbRUmWryB9FB0A5HRxOXWZkyNtvWRvEwIzYI504iujs7Buut0hVMceuQ/n+xE+9ehx7nnyg53qjmSbiTBJqHazZHFiv74E3sg2B4vv3hqk45QGrSHddcLA5tFonUzhYxFow9U6ENCEe11AasXmHRf/PmBd1gb1gQ==
+  tables: replication.cluster
+  server-id: 5400-5404
+  server-time-zone: Asia/Shanghai
+
+route:
+  - source-table: replication.cluster
+    sink-table: test.cluster
+    description: sync table to one destination table
+
+
+sink:
+  type: doris
+  name: sink-queue
+  fenodes: localhost:8035
+  username: root
+  password: NhD3g3hcrPIW/Bxuxf3HnWWN5cQp0PyA5+TV+d3/0IERKcyQuOTT0pfq9H+2gp54hvLPC+XlNHPZnJS4XU5WZ6BeUgxLx9xBVZ1+A1iEwwYvxRl5BkXpetuataSnH/UOUbkWJGuUk7224y3GoNHpV0rUb7SFuJHj8X+BYqDco0kx9dwnXevmyXq+DlmmzjutQrnfdeOOXf6/1sul85+9sJqXQGeIjxu8Nj0v/G8ZFm0slcGULmS7nX1kYlLHxhlk+tK8eNjAF+XDWkOHC2s1j8uGg1wBEa0Qu6v/4DoE3iQkncGnf/UaiuGy9tSQDijSgdmroltHwFpYFoC1zvyFMg==
+  table.create.properties.light_schema_change: true
+  table.create.properties.replication_num: 1
+
+pipeline:
+  name: Sync MySQL Database to Doris
+  parallelism: 2
+  jasypt-encryptor.enabled: true # 是否启用加密功能，默认为false（不启用）
+  jasypt-encryptor.private-key-format: PEM # 密钥格式：DER/PEM，默认采用DER格式
+  jasypt-encryptor.private-key-string: MIIEvgIBADANBgkqhkiG9w0BAQEFAASCBKgwggSkAgEAAoIBAQCVx0Qtu1PTzSGc7Uwg96NvgttYzNzjouaBeoQwzwBm0QpynitoehJMAyBLxqX4Z7eyqEUVem5oIkKYPxiNGVsEBOda0r/u1KxD5bmq0mdVF3xDKPY7j/ogrA//mg7wZPU6fMZPmzea585d4GPMC9N78L0I+N9Plq3BisPoltx5JfBkXdvbvS6AE72raNEO24TPvcPYgXaIuL2h2uF4oX6D8kmsnA1hGuz2gT1ZncIgCVdfM5FaNppsKLKM1CKOq9Xjhe2wKDThYnzDPvhx0NDfp/AnvEUUQB/ZKJYnqzZpEt25s8bokB5BBhZHGrpzOx1RvF5N0Olx2HOxmxPeNEfrAgMBAAECggEAXEE7xmtfC9OLA6zKOnguC+5vCvhMik35awE60RF/rtTNeaHhHN4rzPQT/XijHClOZdXtj3g07yFDIaGjjq1yeTxIAJJVNFd8r+mc/hHRIgFwQbHGUROyvlMdG5QZ5YpZ3ieiwr/ZdSmY3AvtjG4wWmQDG7anXc9ywQam+umJbXi2qrfikPkUteLK7/JLLVpOYSEdNxKvpi99ehOKvIvfOXZdzsemsDKso2M7M6m/50JThfgM4Y112H8D77SeGGCoS0JjqEH+Y9veFhIGNjMkEKo0+mCmdC3Zucc5SpNHWUJbsZ6NnMJK2vdDzMCvW2OAM16K6VQdrp1cNJFT8fZGuQKBgQDD/gH4C9J4QKjphdgO/Tc7MNfuscIZSvNxcv/KNeCcjWMiNNp98W1yLDkjqvZKsVLtT4xrvLJLyz/425GFGqwZdrnuPLJ4KDYAideYlaeYGHkrg3GgkvDdXw5XNkZzl2OgwS42miOI3jrLgDxETkWdm5GOlFFYqeLcWMHaA40LbQKBgQDDov1Rpz4gtty3UylhH7Rvf2HWmJpMTzj0lHh4ctBvKvbVs61O06kPeT2M1mrq6rZsCbT9+AMo8H5Ollkv1BxYlhplWOCS2Wn2kIbl15LbD1nOUm8NUT455hqbXqwQAHuNfJHFLRK6lDpQOW5HzEUFf9NrYP+ElmXWCu38X+5xtwKBgQCy7NNzVaehbLZH6o7isDyZ5u9a1CE04f35Vlk6i5Ewmssj0UieraeTEdhgPZV3fwcL6xFw0eWb2EPgtuLUtxLidEctvW/YzizutOiEPiuwaLdGCEvVohAOqNb4u2353P1xJqs/4dwK+YaHfdyHJ0XaqslpdvIElaOsMcNXeuJqyQKBgDm27dCW7CcuizKyH/T9K3fxNmXeozZ78KuG2Xt/M6p4HFWzKh+lJazg8Z2I7AXdtG9u9awu7I+5UynQBQOtKaegsKzRaX8pEK+it4k67aIehzns68IcA6WFErhfV5do7Qoyg7aNs4bDj+h26OfZhUs4CKEW/oqY6/YXR1o62tdFAoGBAK2AkTkGLWksxIpAMJ+GwPwxIlK6UOtoyxVefIKEy4bVt4vQZFLXwsKKzSTZX5z9CDzV/MUp51Gao9eo0TJkdtjUhNHGV4jdIUzB07V3BoL7nenxNk7Es7Hrp4Jljm8QgILtaeTIDd9pq7GciDi2WHsnD9Ipc1pNK8Rj0+8I8Pdx # 密钥文件名
