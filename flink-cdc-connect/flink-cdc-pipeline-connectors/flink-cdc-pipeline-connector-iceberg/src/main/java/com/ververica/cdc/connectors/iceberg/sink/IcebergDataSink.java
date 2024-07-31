@@ -31,6 +31,10 @@ public class IcebergDataSink implements DataSink, Serializable {
     private Configuration configuration;
     private final ZoneId zoneId;
 
+    public IcebergDataSink(Configuration config) {
+        this(config, ZoneId.systemDefault());
+    }
+
     public IcebergDataSink(Configuration config, ZoneId zoneId) {
         this.configuration = config;
         this.zoneId = zoneId;

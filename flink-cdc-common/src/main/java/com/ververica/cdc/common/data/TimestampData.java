@@ -21,6 +21,7 @@ import com.ververica.cdc.common.types.TimestampType;
 import com.ververica.cdc.common.utils.Preconditions;
 
 import java.sql.Timestamp;
+import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
@@ -81,6 +82,18 @@ public final class TimestampData implements Comparable<TimestampData> {
         LocalDate localDate = LocalDate.ofEpochDay(date);
         LocalTime localTime = LocalTime.ofNanoOfDay(nanoOfDay);
         return LocalDateTime.of(localDate, localTime);
+    }
+
+    /** Converts this {@link TimestampData} object to a {@link Instant}. */
+    public Instant toInstant() {
+        long epochSecond = millisecond / 1000;
+        int milliOfSecond = (int) (millisecond % 1000);
+        if (milliOfSecond < 0) {
+            --epochSecond;
+            milliOfSecond += 1000;
+        }
+        long nanoAdjustment = milliOfSecond * 1_000_000 + nanoOfMillisecond;
+        return Instant.ofEpochSecond(epochSecond, nanoAdjustment);
     }
 
     @Override

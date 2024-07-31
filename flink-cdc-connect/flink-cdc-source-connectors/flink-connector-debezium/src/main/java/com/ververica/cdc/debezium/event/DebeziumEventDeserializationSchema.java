@@ -20,6 +20,7 @@ import org.apache.flink.api.common.typeinfo.TypeInformation;
 import org.apache.flink.util.Collector;
 
 import com.ververica.cdc.common.annotation.Internal;
+import com.ververica.cdc.common.annotation.VisibleForTesting;
 import com.ververica.cdc.common.data.DecimalData;
 import com.ververica.cdc.common.data.LocalZonedTimestampData;
 import com.ververica.cdc.common.data.RecordData;
@@ -36,6 +37,7 @@ import com.ververica.cdc.debezium.DebeziumDeserializationSchema;
 import com.ververica.cdc.debezium.table.DebeziumChangelogMode;
 import com.ververica.cdc.debezium.table.DeserializationRuntimeConverter;
 import com.ververica.cdc.debezium.utils.TemporalConversions;
+import com.ververica.cdc.debezium.utils.TimeStampDataUtils;
 import com.ververica.cdc.runtime.typeutils.BinaryRecordDataGenerator;
 import com.ververica.cdc.runtime.typeutils.EventTypeInfo;
 import io.debezium.data.Envelope;
@@ -57,6 +59,7 @@ import org.slf4j.LoggerFactory;
 import java.math.BigDecimal;
 import java.nio.ByteBuffer;
 import java.time.Instant;
+import java.time.ZoneId;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
@@ -81,10 +84,21 @@ public abstract class DebeziumEventDeserializationSchema extends SourceRecordEve
     /** Changelog Mode to use for encoding changes in Flink internal data structure. */
     protected final DebeziumChangelogMode changelogMode;
 
+    private final String sourceTimeZone;
+    private static final ZoneId timeZoneUTC = ZoneId.of("UTC");
+
     public DebeziumEventDeserializationSchema(
             SchemaDataTypeInference schemaDataTypeInference, DebeziumChangelogMode changelogMode) {
+        this(schemaDataTypeInference, changelogMode, ZoneId.systemDefault().toString());
+    }
+
+    public DebeziumEventDeserializationSchema(
+            SchemaDataTypeInference schemaDataTypeInference,
+            DebeziumChangelogMode changelogMode,
+            String sourceTimeZone) {
         this.schemaDataTypeInference = schemaDataTypeInference;
         this.changelogMode = changelogMode;
+        this.sourceTimeZone = sourceTimeZone;
     }
 
     @Override
@@ -305,13 +319,17 @@ public abstract class DebeziumEventDeserializationSchema extends SourceRecordEve
         if (dbzObj instanceof Long) {
             switch (schema.name()) {
                 case Timestamp.SCHEMA_NAME:
-                    return TimestampData.fromMillis((Long) dbzObj);
+                    TimestampData sourceTime = TimestampData.fromMillis((Long) dbzObj);
+                    return convertToStandardTimeStamp(sourceTime, sourceTimeZone);
                 case MicroTimestamp.SCHEMA_NAME:
                     long micro = (long) dbzObj;
-                    return TimestampData.fromMillis(micro / 1000, (int) (micro % 1000 * 1000));
+                    sourceTime =
+                            TimestampData.fromMillis(micro / 1000, (int) (micro % 1000 * 1000));
+                    return convertToStandardTimeStamp(sourceTime, sourceTimeZone);
                 case NanoTimestamp.SCHEMA_NAME:
                     long nano = (long) dbzObj;
-                    return TimestampData.fromMillis(nano / 1000_000, (int) (nano % 1000_000));
+                    sourceTime = TimestampData.fromMillis(nano / 1000_000, (int) (nano % 1000_000));
+                    return convertToStandardTimeStamp(sourceTime, sourceTimeZone);
             }
         }
         throw new IllegalArgumentException(
@@ -319,6 +337,16 @@ public abstract class DebeziumEventDeserializationSchema extends SourceRecordEve
                         + dbzObj
                         + "' of type "
                         + dbzObj.getClass().getName());
+    }
+
+    @VisibleForTesting
+    public static TimestampData convertToStandardTimeStamp(
+            TimestampData sourceTime, String sourceTimeZone) {
+        if (timeZoneUTC.equals(ZoneId.of(sourceTimeZone))) {
+            return sourceTime;
+        }
+        return TimeStampDataUtils.convertTimeZone(
+                sourceTime, ZoneId.of(sourceTimeZone), timeZoneUTC);
     }
 
     protected Object convertToLocalTimeZoneTimestamp(Object dbzObj, Schema schema) {

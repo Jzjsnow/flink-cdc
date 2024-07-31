@@ -77,7 +77,7 @@ public class IcebergEventSerializer implements Serializable {
                 schemaMaps.put(
                         tableId,
                         SchemaUtils.applySchemaChangeEvent(
-                                schemaMaps.get(tableId), schemaChangeEvent));
+                                schemaMaps.get(tableId), schemaChangeEvent, sinkDataTypeRoots));
             }
         }
     }
@@ -127,7 +127,7 @@ public class IcebergEventSerializer implements Serializable {
         for (int i = 0; i < recordData.getArity(); i++) {
             IcebergRowConverter.SerializationConverter converter =
                     IcebergRowConverter.createNullableExternalConverter(
-                            columns.get(i).getType(), pipelineZoneId);
+                            columns.get(i).getType(), pipelineZoneId, sinkDataTypeRoots.get(i));
             Object field = converter.serialize(i, recordData);
             if (field instanceof String) {
                 genericRowData.setField(i, StringData.fromString(field.toString()));

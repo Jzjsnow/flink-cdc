@@ -18,6 +18,7 @@ package com.ververica.cdc.connectors.doris.sink;
 
 import org.apache.flink.shaded.jackson2.com.fasterxml.jackson.databind.ObjectMapper;
 
+import com.ververica.cdc.common.annotation.VisibleForTesting;
 import com.ververica.cdc.common.data.ArrayData;
 import com.ververica.cdc.common.data.GenericArrayData;
 import com.ververica.cdc.common.data.GenericMapData;
@@ -36,6 +37,7 @@ import java.sql.Date;
 import java.time.LocalDate;
 import java.time.ZoneId;
 import java.time.ZonedDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
@@ -103,19 +105,11 @@ public class DorisRowConverter implements Serializable {
                         DATE_FORMATTER.format(
                                 Date.valueOf(LocalDate.ofEpochDay(val.getInt(index))));
             case TIMESTAMP_WITHOUT_TIME_ZONE:
-                return (index, val) ->
-                        val.getTimestamp(index, DataTypeChecks.getPrecision(type))
-                                .toLocalDateTime()
-                                .format(DATE_TIME_FORMATTER);
+                return createTimeStampWithoutTimeZoneConverter(
+                        type, pipelineZoneId, DATE_TIME_FORMATTER);
             case TIMESTAMP_WITH_LOCAL_TIME_ZONE:
-                return (index, val) ->
-                        ZonedDateTime.ofInstant(
-                                        val.getLocalZonedTimestampData(
-                                                        index, DataTypeChecks.getPrecision(type))
-                                                .toInstant(),
-                                        pipelineZoneId)
-                                .toLocalDateTime()
-                                .format(DATE_TIME_FORMATTER);
+                return createTimeStampWithLocalTimeZoneConverter(
+                        type, pipelineZoneId, DATE_TIME_FORMATTER);
             case TIMESTAMP_WITH_TIME_ZONE:
                 final int zonedP = ((ZonedTimestampType) type).getPrecision();
                 return (index, val) -> val.getTimestamp(index, zonedP).toTimestamp();
@@ -129,6 +123,38 @@ public class DorisRowConverter implements Serializable {
             default:
                 throw new UnsupportedOperationException("Unsupported type:" + type);
         }
+    }
+
+    @VisibleForTesting
+    public static SerializationConverter createTimeStampWithoutTimeZoneConverter(
+            DataType sourceDataType, ZoneId sinkZoneId, DateTimeFormatter formatter) {
+        /**
+         * Since the {@link com.ververica.cdc.common.data.TimestampData} passed from source contains
+         * epoch milliseconds, the {@link ZonedDateTime} class is used here to display the time as a
+         * time string in the specified time zone. e.g. A TimestampData instance contains a
+         * millisecond of 1704038401000L, representing 2023-12-31T16:00:01Z. If the input time zone
+         * is UTC+8, it will eventually return 2024-01-01 00:00:01.000000.
+         */
+        return (index, val) ->
+                ZonedDateTime.ofInstant(
+                                val.getTimestamp(index, DataTypeChecks.getPrecision(sourceDataType))
+                                        .toInstant(),
+                                sinkZoneId)
+                        .toLocalDateTime()
+                        .format(formatter);
+    }
+
+    @VisibleForTesting
+    public static SerializationConverter createTimeStampWithLocalTimeZoneConverter(
+            DataType sourceDataType, ZoneId sinkZoneId, DateTimeFormatter formatter) {
+        return (index, val) ->
+                ZonedDateTime.ofInstant(
+                                val.getLocalZonedTimestampData(
+                                                index, DataTypeChecks.getPrecision(sourceDataType))
+                                        .toInstant(),
+                                sinkZoneId)
+                        .toLocalDateTime()
+                        .format(formatter);
     }
 
     private static List<Object> convertArrayData(ArrayData array, DataType type) {
