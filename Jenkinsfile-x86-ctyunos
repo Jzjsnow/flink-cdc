@@ -1,0 +1,185 @@
+@Library('cdn-devops') _
+
+def RELEASE_BUILD
+String BUILD_RESULT = ""
+
+pipeline {
+    agent {
+        label 'bigdata-192.168.29.31'
+    }
+	options {
+		buildDiscarder(logRotator(numToKeepStr: '10'))
+		disableConcurrentBuilds()
+		skipDefaultCheckout()
+		timeout(time: 300, unit: 'MINUTES')
+		gitLabConnection('gitlab')
+	}
+    environment {
+        IMAGE_CREDENTIALS = "credential-harbor"
+        // 镜像仓库地址
+        IMAGE_REPOSITORY = "harbor.ctyuncdn.cn/bdyun/flink"
+
+        //  定义名字
+        DEPLOYMENT_NAME = "flink-cdc"
+        SERVICE_TARGET_PORT = 8080         // 程序启用的端口号
+
+        // 执行条件（通用）
+        MASTER_BRANCH = "release-.*-master" // flink的主分支
+        DEV_BRANCH = "FLINK.*" //开发临时分支
+        RELEASE_TAG = ".*release" //发布分支或者tag
+        //QA_TAG = "v\\d+\\.\\d+.\\d+(-\\d+)?" // v1.0.0-01
+        
+    }
+
+    stages {
+        stage('Checkout') {
+            steps {
+                script {
+                        // checkout code
+                        //flink Use the flinkci user to perform maven packaging, but pulling git code requires root privileges,
+                        //so you need to change to root before pulling code each time.
+                        sh """chown -R root:root $WORKSPACE"""
+                        retry(2) { scmVars = checkout scm }
+                        RELEASE_BUILD = scmVars.GIT_COMMIT
+                        BUILD_RESULT = devops.updateBuildTasks(BUILD_RESULT,"Checkout OK...  √")
+                        echo 'begin checkout...'
+                        echo sh(returnStdout: true, script: "env")
+                        gitCommitId = scmVars.GIT_COMMIT
+                        gitCommitMsg = sh(script: "git log --pretty=format:%s ${gitCommitId} -1", returnStdout: true).trim()
+                        git_commit_name = sh (script: "git --no-pager show -s --format='%an' ${gitCommitId}",returnStdout: true).trim()
+                        println "git_commit_name=" + git_commit_name        
+                        stringname=BRANCH_NAME
+                        getassemblyversion=sh(script:"echo ${stringname}|cut -d '-' -f 1,2",returnStdout: true).trim()
+                        println "getassemblyversion=" + getassemblyversion
+                        getassemblyversion="flink-cdc-"+getassemblyversion
+                        println "getassemblyversion=" + getassemblyversion
+                        def pomversion = readMavenPom file: "${WORKSPACE}/pom.xml"
+                        //pomversion = "1.16-SNAPSHOT"
+                        println "pom.version=" + pomversion
+                        version = sh(script:"echo ${pomversion}|cut -d '-' -f 1",returnStdout: true).trim()
+                        println "version=" + version
+                        filepath = "flink-cdc-dist/target/flink-cdc-" + pomversion + "-bin/flink-cdc-" +pomversion
+                        println "filepath=" + filepath
+                }
+            }
+        }
+
+        stage('Check-Commit-Message') {
+            when {
+                expression { BRANCH_NAME ==~ env.DEV_BRANCH || BRANCH_NAME ==~ env.MASTER_BRANCH}
+            }
+            steps {
+                script {
+                    sh("git config --global --add safe.directory " + WORKSPACE)
+                    //gitCommitId = scmVars.GIT_COMMIT
+                    //gitCommitMsg = sh(script: "git log --pretty=format:%s ${gitCommitId} -1", returnStdout: true).trim()
+                    echo 'begin checkout...'
+                    echo sh(returnStdout: true, script: "env")
+                    def re_commit = /^(\[FLINK-\d+\])|(\(hotfix\)).+$/
+                    //def re_commit = /^(\[(FLINK)-\d+\]){1,3}.+$/
+                    match_result = (gitCommitMsg =~ re_commit).matches()
+
+                    println gitCommitMsg
+                    println match_result
+
+                    if(match_result){
+                        echo "符合规范"
+                    }else{
+                        echo "不符合规范"
+                        script {
+                            error "commit message 不符合规范!"
+                        }
+                    }
+
+                }
+            }
+        }
+
+        stage('Build-Package') {
+            when {
+                expression { BRANCH_NAME ==~ env.MASTER_BRANCH || BRANCH_NAME ==~ env.DEV_BRANCH || BRANCH_NAME ==~ env.RELEASE_TAG}
+            }
+            steps {
+                script {
+                        sh """ls -lh"""
+                        sh """echo $WORKSPACE"""
+                        if(BRANCH_NAME ==~ env.MASTER_BRANCH || BRANCH_NAME ==~ env.DEV_BRANCH){
+                        //The uid and gid correspond to the flinkci user in the docker image
+                            sh """mkdir -p /data1/flinkcdc/maven && chown -R 9999:9999 /data1/flinkcdc/maven && chown -R 9999:9999 $WORKSPACE && docker run --privileged --rm --cpus="6" -m 12g --user flinkci -v $WORKSPACE:/home/flinkci/flinkcdc -v /data1/flinkcdc/maven:/home/flinkci/.m2/repository -v /var/run/docker.sock:/var/run/docker.sock harbor.ctyuncdn.cn/bdyun/basic-image/amd-ctyunos-flinkcdc:v1.0.0 /bin/bash -c \"cd /home/flinkci/flinkcdc && mvn clean install -Dscala-2.12\""""
+
+                        }else{
+                            sh """mkdir -p /data1/flinkcdc/maven && chown -R 9999:9999 /data1/flinkcdc/maven && chown -R 9999:9999 $WORKSPACE && docker run --privileged --rm --cpus="6" -m 12g --user flinkci -v $WORKSPACE:/home/flinkci/flinkcdc -v /data1/flinkcdc/maven:/home/flinkci/.m2/repository harbor.ctyuncdn.cn/bdyun/basic-image/amd-ctyunos-flinkcdc:v1.0.0 /bin/bash -c \"cd /home/flinkci/flinkcdc && mvn clean install -DskipTests -Dfast  -Dscala-2.12\""""
+                        }
+                        BUILD_RESULT = devops.updateBuildTasks(BUILD_RESULT,"Build-Package OK...√")
+                }
+            }
+        }
+
+
+        stage('CI'){
+            failFast true
+            parallel {
+                stage('Unit Test') {
+                    when {
+                        expression { BRANCH_NAME ==~ env.DEV_BRANCH || BRANCH_NAME ==~ env.QA_TAG}
+                    }
+                    steps {
+                        script {
+                                echo 'skip unit test'
+                        }
+                    }
+                }
+                stage('Code Scan') {
+                    when {
+                        expression { BRANCH_NAME ==~ env.DEV_BRANCH || BRANCH_NAME ==~ env.QA_TAG }
+                    }
+                    steps {
+                        script {
+                                sh """
+                                    // sed -i 's#{{SONAR_PROJECT_NAME}}#'$DEPLOYMENT_NAME'#g' sonar-project.properties
+                                """
+                                echo 'skip'
+                                //devops.scan().start()
+                        }
+                    }
+                }
+            }
+        }
+
+        //stage('Build-Image'){}
+        stage('ARCHIVE'){
+            when {
+                expression {BRANCH_NAME ==~ env.RELEASE_TAG}
+            }
+            steps {
+                script {
+                    sh """
+                    ls -lh flink-cdc-dist/target
+                    rm -rf ${getassemblyversion}.tar.gz
+                    mv ${filepath} ${getassemblyversion}
+                    ls -l ${getassemblyversion}/
+                    tar -czf ${getassemblyversion}.tar.gz ${getassemblyversion}
+                    curl -v -u sys_deployer:c3lzX2RlcGxveWVyCg --upload-file ${getassemblyversion}.tar.gz https://devops.ctcdn.cn/nexus/repository/raw-repo/BigDataProduction/ccd-release-generic/3.3.3-intel-x86-ctyunos2.0.1-newtar/
+                    """
+                }
+            }
+        }
+
+    }
+
+    post {
+        success {
+            script {
+                updateGitlabCommitStatus(name: 'result', state: 'success')
+            }
+        }
+        failure {
+            script {
+                updateGitlabCommitStatus(name: 'result', state: 'failed')
+            }
+        }
+    }
+
+}
+
+
