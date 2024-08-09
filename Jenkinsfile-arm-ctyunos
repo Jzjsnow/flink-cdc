@@ -53,8 +53,7 @@ pipeline {
                         println "getassemblyversion=" + getassemblyversion
                         getassemblyversion="flink-cdc-"+getassemblyversion
                         println "getassemblyversion=" + getassemblyversion
-                        //def pomversion = readMavenPom file: "${WORKSPACE}/pom.xml"
-                        pomversion = "3.1-SNAPSHOT"
+                        pomversion = sh (script: "grep revision pom.xml|grep -v version|tr -d 'revision<>/' |tr -d '[:space]'", returnStdout: true).trim()
                         println "pom.version=" + pomversion
                         version = sh(script:"echo ${pomversion}|cut -d '-' -f 1",returnStdout: true).trim()
                         println "version=" + version
