@@ -315,6 +315,8 @@ under the License.
                         <exclude>
                             flink-cdc-connect/flink-cdc-source-connectors/flink-connector-db2-cdc/src/test/resources/db2_server/Dockerfile
                         </exclude>
+			<exclude>Jenkinsfile-arm-ctyunos</exclude>
+			<exclude>Jenkinsfile-x86-ctyunos</exclude>
                     </excludes>
                 </configuration>
             </plugin>
