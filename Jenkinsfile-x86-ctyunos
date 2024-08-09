@@ -25,7 +25,7 @@ pipeline {
 
         // 执行条件（通用）
         MASTER_BRANCH = "release-.*-master" // flink的主分支
-        DEV_BRANCH = "FLINK.*" //开发临时分支
+        DEV_BRANCH = "FLINK-CDC.*" //开发临时分支
         RELEASE_TAG = ".*release" //发布分支或者tag
         //QA_TAG = "v\\d+\\.\\d+.\\d+(-\\d+)?" // v1.0.0-01
         
