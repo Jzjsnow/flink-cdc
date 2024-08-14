@@ -16,11 +16,9 @@
 
 package com.ververical.cdc.connectors.starrocks.sink;
 
-import org.apache.flink.api.common.JobID;
 import org.apache.flink.api.common.operators.MailboxExecutor;
 import org.apache.flink.api.common.operators.ProcessingTimeService;
 import org.apache.flink.api.common.serialization.SerializationSchema;
-import org.apache.flink.api.common.typeutils.TypeSerializer;
 import org.apache.flink.api.connector.sink2.Sink;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.metrics.MetricGroup;
@@ -317,10 +315,10 @@ public class EventRecordSerializationSchemaTest {
             throw new UnsupportedOperationException();
         }
 
-        @Override
-        public int getAttemptNumber() {
-            throw new UnsupportedOperationException();
-        }
+        //        @Override
+        //        public int getAttemptNumber() {
+        //            throw new UnsupportedOperationException();
+        //        }
 
         @Override
         public SinkWriterMetricGroup metricGroup() {
@@ -338,19 +336,19 @@ public class EventRecordSerializationSchemaTest {
             throw new UnsupportedOperationException();
         }
 
-        @Override
-        public boolean isObjectReuseEnabled() {
-            throw new UnsupportedOperationException();
-        }
-
-        @Override
-        public <IN> TypeSerializer<IN> createInputSerializer() {
-            throw new UnsupportedOperationException();
-        }
-
-        @Override
-        public JobID getJobId() {
-            throw new UnsupportedOperationException();
-        }
+        //        @Override
+        //        public boolean isObjectReuseEnabled() {
+        //            throw new UnsupportedOperationException();
+        //        }
+        //
+        //        @Override
+        //        public <IN> TypeSerializer<IN> createInputSerializer() {
+        //            throw new UnsupportedOperationException();
+        //        }
+        //
+        //        @Override
+        //        public JobID getJobId() {
+        //            throw new UnsupportedOperationException();
+        //        }
     }
 }

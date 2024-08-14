@@ -18,7 +18,7 @@ package com.ververica.cdc.runtime.operators.route;
 
 import org.apache.flink.configuration.Configuration;
 
-import org.apache.flink.shaded.guava31.com.google.common.collect.ImmutableMap;
+import org.apache.flink.shaded.guava30.com.google.common.collect.ImmutableMap;
 
 import com.ververica.cdc.common.data.binary.BinaryStringData;
 import com.ververica.cdc.common.event.AddColumnEvent;

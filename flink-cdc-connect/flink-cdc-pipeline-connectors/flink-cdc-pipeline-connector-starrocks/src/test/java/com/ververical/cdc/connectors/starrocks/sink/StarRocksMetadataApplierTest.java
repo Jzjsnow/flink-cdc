@@ -16,7 +16,7 @@
 
 package com.ververical.cdc.connectors.starrocks.sink;
 
-import org.apache.flink.shaded.guava31.com.google.common.collect.ImmutableMap;
+import org.apache.flink.shaded.guava30.com.google.common.collect.ImmutableMap;
 
 import com.starrocks.connector.flink.catalog.StarRocksColumn;
 import com.starrocks.connector.flink.catalog.StarRocksTable;

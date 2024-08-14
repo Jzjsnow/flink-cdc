@@ -60,6 +60,10 @@ import java.util.Set;
 public class DataSinkWriterOperator<CommT> extends AbstractStreamOperator<CommittableMessage<CommT>>
         implements OneInputStreamOperator<Event, CommittableMessage<CommT>>, BoundedOneInput {
 
+    public SchemaEvolutionClient getSchemaEvolutionClient() {
+        return schemaEvolutionClient;
+    }
+
     private SchemaEvolutionClient schemaEvolutionClient;
 
     private final OperatorID schemaOperatorID;
@@ -179,7 +183,7 @@ public class DataSinkWriterOperator<CommT> extends AbstractStreamOperator<Commit
                 getRuntimeContext().getIndexOfThisSubtask(), event.getTableId());
     }
 
-    private void emitLatestSchema(TableId tableId) throws Exception {
+    public void emitLatestSchema(TableId tableId) throws Exception {
         Optional<Schema> schema = schemaEvolutionClient.getLatestSchema(tableId);
         if (schema.isPresent()) {
             // request and process CreateTableEvent because SinkWriter need to retrieve
@@ -236,7 +240,7 @@ public class DataSinkWriterOperator<CommT> extends AbstractStreamOperator<Commit
     }
 
     @SuppressWarnings("unchecked")
-    private <T> T getFlinkWriterOperator() {
+    public <T> T getFlinkWriterOperator() {
         return (T) flinkWriterOperator;
     }
 }

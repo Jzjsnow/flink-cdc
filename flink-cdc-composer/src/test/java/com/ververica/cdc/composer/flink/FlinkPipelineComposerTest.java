@@ -16,7 +16,7 @@
 
 package com.ververica.cdc.composer.flink;
 
-import org.apache.flink.shaded.guava31.com.google.common.collect.ImmutableMap;
+import org.apache.flink.shaded.guava30.com.google.common.collect.ImmutableMap;
 
 import com.ververica.cdc.common.configuration.Configuration;
 import com.ververica.cdc.common.factories.DataSinkFactory;

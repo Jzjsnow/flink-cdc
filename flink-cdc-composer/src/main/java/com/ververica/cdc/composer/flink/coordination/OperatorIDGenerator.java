@@ -18,7 +18,7 @@ package com.ververica.cdc.composer.flink.coordination;
 
 import org.apache.flink.runtime.jobgraph.OperatorID;
 
-import org.apache.flink.shaded.guava31.com.google.common.hash.Hashing;
+import org.apache.flink.shaded.guava30.com.google.common.hash.Hashing;
 
 import com.ververica.cdc.common.annotation.Internal;
 

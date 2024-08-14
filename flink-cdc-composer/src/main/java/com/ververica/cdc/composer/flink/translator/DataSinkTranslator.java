@@ -30,10 +30,13 @@ import org.apache.flink.streaming.runtime.operators.sink.CommitterOperatorFactor
 
 import com.ververica.cdc.common.annotation.Internal;
 import com.ververica.cdc.common.event.Event;
+import com.ververica.cdc.common.sink.CustomFlinkSinkProvider;
+import com.ververica.cdc.common.sink.CustomSink;
 import com.ververica.cdc.common.sink.DataSink;
 import com.ververica.cdc.common.sink.EventSinkProvider;
 import com.ververica.cdc.common.sink.FlinkSinkProvider;
 import com.ververica.cdc.composer.definition.SinkDef;
+import com.ververica.cdc.runtime.operators.sink.CustomDataSinkWriterOperatorFactory;
 import com.ververica.cdc.runtime.operators.sink.DataSinkWriterOperatorFactory;
 
 /** Translator for building sink into the DataStream. */
@@ -55,6 +58,19 @@ public class DataSinkTranslator {
             FlinkSinkProvider sinkProvider = (FlinkSinkProvider) eventSinkProvider;
             Sink<Event> sink = sinkProvider.getSink();
             sinkTo(input, sink, sinkName, schemaOperatorID);
+        }
+
+        if (eventSinkProvider instanceof CustomFlinkSinkProvider) {
+
+            input.transform(
+                    SINK_WRITER_PREFIX + sinkName,
+                    CommittableMessageTypeInfo.noOutput(),
+                    new CustomDataSinkWriterOperatorFactory<>(schemaOperatorID));
+
+            // Sink V2
+            CustomFlinkSinkProvider sinkProvider = (CustomFlinkSinkProvider) eventSinkProvider;
+            CustomSink<Event> sink = sinkProvider.getSink();
+            sink.sinkTo(input);
         }
     }
 

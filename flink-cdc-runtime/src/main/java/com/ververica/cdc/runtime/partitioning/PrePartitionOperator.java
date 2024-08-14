@@ -23,9 +23,9 @@ import org.apache.flink.streaming.api.operators.ChainingStrategy;
 import org.apache.flink.streaming.api.operators.OneInputStreamOperator;
 import org.apache.flink.streaming.runtime.streamrecord.StreamRecord;
 
-import org.apache.flink.shaded.guava31.com.google.common.cache.CacheBuilder;
-import org.apache.flink.shaded.guava31.com.google.common.cache.CacheLoader;
-import org.apache.flink.shaded.guava31.com.google.common.cache.LoadingCache;
+import org.apache.flink.shaded.guava30.com.google.common.cache.CacheBuilder;
+import org.apache.flink.shaded.guava30.com.google.common.cache.CacheLoader;
+import org.apache.flink.shaded.guava30.com.google.common.cache.LoadingCache;
 
 import com.ververica.cdc.common.annotation.Internal;
 import com.ververica.cdc.common.annotation.VisibleForTesting;

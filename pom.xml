@@ -60,7 +60,7 @@ under the License.
     </distributionManagement>
 
     <properties>
-        <revision>3.0-SNAPSHOT</revision>
+        <revision>3.0-MST1.0.0</revision>
         <java.version>1.8</java.version>
         <scala.binary.version>2.12</scala.binary.version>
         <maven.compiler.source>${java.version}</maven.compiler.source>
@@ -71,9 +71,9 @@ under the License.
         <flink.reuseForks>true</flink.reuseForks>
 
         <!-- dependencies versions -->
-        <flink.version>1.18.0</flink.version>
-        <flink.major.version>1.18</flink.major.version>
-        <flink.shaded.version>17.0</flink.shaded.version>
+        <flink.version>1.16.3</flink.version>
+        <flink.major.version>1.16</flink.major.version>
+        <flink.shaded.version>15.0</flink.shaded.version>
         <debezium.version>1.9.7.Final</debezium.version>
         <tikv.version>3.2.0</tikv.version>
         <geometry.version>2.2.0</geometry.version>
@@ -153,7 +153,7 @@ under the License.
         <dependency>
             <groupId>org.apache.flink</groupId>
             <artifactId>flink-shaded-guava</artifactId>
-            <version>31.1-jre-${flink.shaded.version}</version>
+            <version>30.1.1-jre-${flink.shaded.version}</version>
         </dependency>
 
         <dependency>

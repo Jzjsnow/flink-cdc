@@ -16,7 +16,7 @@
 
 package com.ververica.cdc.composer.flink.translator;
 
-import org.apache.flink.shaded.guava31.com.google.common.collect.ImmutableMap;
+import org.apache.flink.shaded.guava30.com.google.common.collect.ImmutableMap;
 
 import com.ververica.cdc.common.configuration.Configuration;
 import com.ververica.cdc.common.factories.DataSourceFactory;
