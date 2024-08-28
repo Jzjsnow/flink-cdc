@@ -31,6 +31,7 @@ import com.ververica.cdc.composer.PipelineComposer;
 import com.ververica.cdc.composer.PipelineExecution;
 import com.ververica.cdc.composer.definition.PipelineDef;
 import com.ververica.cdc.composer.definition.SinkDef;
+import com.ververica.cdc.composer.definition.SourceDef;
 import com.ververica.cdc.composer.flink.coordination.OperatorIDGenerator;
 import com.ververica.cdc.composer.flink.translator.DataSinkTranslator;
 import com.ververica.cdc.composer.flink.translator.DataSourceTranslator;
@@ -97,8 +98,17 @@ public class FlinkPipelineComposer implements PipelineComposer {
 
         // Source
         DataSourceTranslator sourceTranslator = new DataSourceTranslator();
-        DataStream<Event> stream =
-                sourceTranslator.translate(pipelineDef.getSource(), env, pipelineDef.getConfig());
+        List<SourceDef> sourceDefs = pipelineDef.getSources();
+        DataStream<Event> stream = null;
+        for (SourceDef sourceDef : sourceDefs) {
+            DataStream<Event> streamBranch =
+                    sourceTranslator.translate(sourceDef, env, pipelineDef.getConfig());
+            if (stream == null) {
+                stream = streamBranch;
+            } else {
+                stream = stream.union(streamBranch);
+            }
+        }
 
         // Route
         RouteTranslator routeTranslator = new RouteTranslator();

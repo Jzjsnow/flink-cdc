@@ -48,27 +48,27 @@ import static com.ververica.cdc.common.pipeline.PipelineOptions.PIPELINE_LOCAL_T
  * engine.
  */
 public class PipelineDef {
-    private final SourceDef source;
+    private final List<SourceDef> sources;
     private final SinkDef sink;
     private final List<RouteDef> routes;
     private final List<TransformDef> transforms;
     private final Configuration config;
 
     public PipelineDef(
-            SourceDef source,
+            List<SourceDef> sources,
             SinkDef sink,
             List<RouteDef> routes,
             List<TransformDef> transforms,
             Configuration config) {
-        this.source = source;
+        this.sources = sources;
         this.sink = sink;
         this.routes = routes;
         this.transforms = transforms;
         this.config = evaluatePipelineTimeZone(config);
     }
 
-    public SourceDef getSource() {
-        return source;
+    public List<SourceDef> getSources() {
+        return sources;
     }
 
     public SinkDef getSink() {
@@ -91,7 +91,7 @@ public class PipelineDef {
     public String toString() {
         return "PipelineDef{"
                 + "source="
-                + source
+                + sources
                 + ", sink="
                 + sink
                 + ", routes="
@@ -112,7 +112,7 @@ public class PipelineDef {
             return false;
         }
         PipelineDef that = (PipelineDef) o;
-        return Objects.equals(source, that.source)
+        return Objects.equals(sources, that.sources)
                 && Objects.equals(sink, that.sink)
                 && Objects.equals(routes, that.routes)
                 && Objects.equals(transforms, that.transforms)
@@ -121,7 +121,7 @@ public class PipelineDef {
 
     @Override
     public int hashCode() {
-        return Objects.hash(source, sink, routes, transforms, config);
+        return Objects.hash(sources, sink, routes, transforms, config);
     }
 
     // ------------------------------------------------------------------------

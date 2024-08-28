@@ -19,6 +19,7 @@ package com.ververica.cdc.cli.parser;
 import org.apache.flink.shaded.jackson2.com.fasterxml.jackson.core.type.TypeReference;
 import org.apache.flink.shaded.jackson2.com.fasterxml.jackson.databind.JsonNode;
 import org.apache.flink.shaded.jackson2.com.fasterxml.jackson.databind.ObjectMapper;
+import org.apache.flink.shaded.jackson2.com.fasterxml.jackson.databind.node.ObjectNode;
 import org.apache.flink.shaded.jackson2.com.fasterxml.jackson.dataformat.yaml.YAMLFactory;
 
 import com.ververica.cdc.common.configuration.Configuration;
@@ -29,6 +30,7 @@ import com.ververica.cdc.composer.definition.SourceDef;
 
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -47,6 +49,12 @@ public class YamlPipelineDefinitionParser implements PipelineDefinitionParser {
     // Source / sink keys
     private static final String TYPE_KEY = "type";
     private static final String NAME_KEY = "name";
+    private static final String HOST_LIST = "host_list";
+    private static final String COMMA = ",";
+    private static final String HOST_NAME = "hostname";
+    private static final String PORT = "port";
+    private static final String COLON = ":";
+    private static final String UDAL = "_udal";
 
     // Route keys
     private static final String ROUTE_SOURCE_TABLE_KEY = "source-table";
@@ -60,15 +68,27 @@ public class YamlPipelineDefinitionParser implements PipelineDefinitionParser {
     public PipelineDef parse(Path pipelineDefPath, Configuration globalPipelineConfig)
             throws Exception {
         JsonNode root = mapper.readTree(pipelineDefPath.toFile());
-
-        // Source is required
-        SourceDef sourceDef =
-                toSourceDef(
-                        checkNotNull(
-                                root.get(SOURCE_KEY),
-                                "Missing required field \"%s\" in pipeline definition",
-                                SOURCE_KEY));
-
+        JsonNode sourceNode = root.get(SOURCE_KEY);
+        JsonNode hostList = sourceNode.get(HOST_LIST);
+        String type = sourceNode.get(TYPE_KEY).asText();
+        List<SourceDef> sourceDefs = new ArrayList<>();
+        if (hostList != null && type.contains(UDAL)) {
+            String hostString = hostList.asText();
+            String[] hosts = hostString.split(COMMA);
+            Arrays.stream(hosts)
+                    .forEach(
+                            e -> {
+                                ((ObjectNode) sourceNode)
+                                        .put(TYPE_KEY, type.substring(0, type.indexOf("_")));
+                                ((ObjectNode) sourceNode).put(HOST_NAME, e.split(COLON)[0]);
+                                ((ObjectNode) sourceNode).put(PORT, e.split(COLON)[1]);
+                                ((ObjectNode) sourceNode).remove(HOST_LIST);
+                                getSourceDefs(sourceNode, sourceDefs);
+                            });
+        } else {
+            // Source is required
+            getSourceDefs(sourceNode, sourceDefs);
+        }
         // Sink is required
         SinkDef sinkDef =
                 toSinkDef(
@@ -90,7 +110,17 @@ public class YamlPipelineDefinitionParser implements PipelineDefinitionParser {
         pipelineConfig.addAll(globalPipelineConfig);
         pipelineConfig.addAll(userPipelineConfig);
 
-        return new PipelineDef(sourceDef, sinkDef, routeDefs, null, pipelineConfig);
+        return new PipelineDef(sourceDefs, sinkDef, routeDefs, null, pipelineConfig);
+    }
+
+    private void getSourceDefs(JsonNode root, List<SourceDef> sourceDefs) {
+        SourceDef sourceDef =
+                toSourceDef(
+                        checkNotNull(
+                                root,
+                                "Missing required field \"%s\" in pipeline definition",
+                                SOURCE_KEY));
+        sourceDefs.add(sourceDef);
     }
 
     private SourceDef toSourceDef(JsonNode sourceNode) {
