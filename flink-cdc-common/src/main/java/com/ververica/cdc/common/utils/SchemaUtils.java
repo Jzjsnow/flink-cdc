@@ -125,7 +125,7 @@ public class SchemaUtils {
         return oldSchema.copy(columns);
     }
 
-    private static Schema applyDropColumnEvent(DropColumnEvent event, Schema oldSchema) {
+    private static List<Column> getColumnsAfterDropping(DropColumnEvent event, Schema oldSchema) {
         event.getDroppedColumns()
                 .forEach(
                         column -> {
@@ -134,10 +134,17 @@ public class SchemaUtils {
                                         column.getName() + " of DropColumnEvent is not existed");
                             }
                         });
-        List<Column> columns =
-                oldSchema.getColumns().stream()
-                        .filter((column -> !event.getDroppedColumns().contains(column)))
+        List<String> dropColumnNames =
+                event.getDroppedColumns().stream()
+                        .map(Column::getName)
                         .collect(Collectors.toList());
+        return oldSchema.getColumns().stream()
+                .filter((column -> !dropColumnNames.contains(column.getName())))
+                .collect(Collectors.toList());
+    }
+
+    private static Schema applyDropColumnEvent(DropColumnEvent event, Schema oldSchema) {
+        List<Column> columns = getColumnsAfterDropping(event, oldSchema);
         return oldSchema.copy(columns);
     }
 
