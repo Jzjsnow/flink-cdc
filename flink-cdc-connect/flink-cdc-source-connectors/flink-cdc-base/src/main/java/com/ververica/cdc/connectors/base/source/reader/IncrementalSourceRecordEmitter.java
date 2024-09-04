@@ -34,6 +34,7 @@ import org.apache.kafka.connect.source.SourceRecord;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.Serializable;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.Map;
@@ -54,14 +55,19 @@ import static com.ververica.cdc.connectors.base.utils.SourceRecordUtils.isSchema
  * emit records rather than emit the records directly.
  */
 public class IncrementalSourceRecordEmitter<T>
-        implements RecordEmitter<SourceRecords, T, SourceSplitState> {
+        implements RecordEmitter<SourceRecords, T, SourceSplitState>, Serializable {
 
     private static final Logger LOG = LoggerFactory.getLogger(IncrementalSourceRecordEmitter.class);
     private static final FlinkJsonTableChangeSerializer TABLE_CHANGE_SERIALIZER =
             new FlinkJsonTableChangeSerializer();
 
     protected final DebeziumDeserializationSchema<T> debeziumDeserializationSchema;
-    protected final SourceReaderMetrics sourceReaderMetrics;
+
+    public void setSourceReaderMetrics(SourceReaderMetrics sourceReaderMetrics) {
+        this.sourceReaderMetrics = sourceReaderMetrics;
+    }
+
+    protected SourceReaderMetrics sourceReaderMetrics;
     protected final boolean includeSchemaChanges;
     protected final OutputCollector<T> outputCollector;
     protected final OffsetFactory offsetFactory;
@@ -167,7 +173,7 @@ public class IncrementalSourceRecordEmitter<T>
         }
     }
 
-    private static class OutputCollector<T> implements Collector<T> {
+    private static class OutputCollector<T> implements Collector<T>, Serializable {
         private SourceOutput<T> output;
 
         @Override

@@ -18,6 +18,7 @@ package com.ververica.cdc.connectors.postgres.source;
 
 import org.apache.flink.api.connector.source.SplitEnumerator;
 import org.apache.flink.api.connector.source.SplitEnumeratorContext;
+import org.apache.flink.connector.base.source.reader.RecordEmitter;
 import org.apache.flink.util.FlinkRuntimeException;
 
 import com.ververica.cdc.common.annotation.Experimental;
@@ -28,7 +29,9 @@ import com.ververica.cdc.connectors.base.source.assigner.SplitAssigner;
 import com.ververica.cdc.connectors.base.source.assigner.StreamSplitAssigner;
 import com.ververica.cdc.connectors.base.source.assigner.state.PendingSplitsState;
 import com.ververica.cdc.connectors.base.source.jdbc.JdbcIncrementalSource;
+import com.ververica.cdc.connectors.base.source.meta.split.SourceRecords;
 import com.ververica.cdc.connectors.base.source.meta.split.SourceSplitBase;
+import com.ververica.cdc.connectors.base.source.meta.split.SourceSplitState;
 import com.ververica.cdc.connectors.postgres.source.config.PostgresSourceConfig;
 import com.ververica.cdc.connectors.postgres.source.config.PostgresSourceConfigFactory;
 import com.ververica.cdc.connectors.postgres.source.enumerator.PostgresSourceEnumerator;
@@ -48,6 +51,7 @@ public class PostgresSourceBuilder<T> {
 
     private final PostgresSourceConfigFactory configFactory = new PostgresSourceConfigFactory();
     private DebeziumDeserializationSchema<T> deserializer;
+    private static RecordEmitter recordEmitter;
 
     private PostgresSourceBuilder() {}
 
@@ -263,6 +267,12 @@ public class PostgresSourceBuilder<T> {
         return this;
     }
 
+    public PostgresSourceBuilder<T> recordEmitter(
+            RecordEmitter<SourceRecords, T, SourceSplitState> recordEmitter) {
+        this.recordEmitter = recordEmitter;
+        return this;
+    }
+
     /**
      * Build the {@link PostgresIncrementalSource}.
      *
@@ -284,6 +294,7 @@ public class PostgresSourceBuilder<T> {
                 PostgresOffsetFactory offsetFactory,
                 PostgresDialect dataSourceDialect) {
             super(configFactory, deserializationSchema, offsetFactory, dataSourceDialect);
+            super.setRecordEmitter(recordEmitter);
         }
 
         @Override

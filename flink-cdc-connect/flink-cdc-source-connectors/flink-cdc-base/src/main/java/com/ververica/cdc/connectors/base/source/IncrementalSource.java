@@ -80,6 +80,7 @@ public class IncrementalSource<T, C extends SourceConfig>
     // snapshot phase are correctly backfilled into the snapshot by registering a pre high watermark
     // hook for generating changes.
     private SnapshotPhaseHooks snapshotHooks = SnapshotPhaseHooks.empty();
+    private RecordEmitter<SourceRecords, T, SourceSplitState> recordEmitter;
 
     public IncrementalSource(
             SourceConfig.Factory<C> configFactory,
@@ -210,11 +211,18 @@ public class IncrementalSource<T, C extends SourceConfig>
 
     protected RecordEmitter<SourceRecords, T, SourceSplitState> createRecordEmitter(
             SourceConfig sourceConfig, SourceReaderMetrics sourceReaderMetrics) {
-        return new IncrementalSourceRecordEmitter<>(
-                deserializationSchema,
-                sourceReaderMetrics,
-                sourceConfig.isIncludeSchemaChanges(),
-                offsetFactory);
+        if (recordEmitter != null) {
+            IncrementalSourceRecordEmitter incrementalSourceRecordEmitter =
+                    (IncrementalSourceRecordEmitter) recordEmitter;
+            incrementalSourceRecordEmitter.setSourceReaderMetrics(sourceReaderMetrics);
+            return incrementalSourceRecordEmitter;
+        } else {
+            return new IncrementalSourceRecordEmitter<>(
+                    deserializationSchema,
+                    sourceReaderMetrics,
+                    sourceConfig.isIncludeSchemaChanges(),
+                    offsetFactory);
+        }
     }
 
     /**
@@ -225,5 +233,9 @@ public class IncrementalSource<T, C extends SourceConfig>
     @VisibleForTesting
     public void setSnapshotHooks(SnapshotPhaseHooks snapshotHooks) {
         this.snapshotHooks = snapshotHooks;
+    }
+
+    public void setRecordEmitter(RecordEmitter<SourceRecords, T, SourceSplitState> recordEmitter) {
+        this.recordEmitter = recordEmitter;
     }
 }
