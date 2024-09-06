@@ -35,15 +35,19 @@ import com.ververica.cdc.connectors.mysql.source.offset.BinlogOffsetBuilder;
 import com.ververica.cdc.connectors.mysql.table.StartupOptions;
 import com.ververica.cdc.connectors.mysql.utils.MySqlSchemaUtils;
 import com.ververica.cdc.connectors.mysql.utils.OptionUtils;
+import org.apache.flink.table.catalog.ObjectPath;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.time.Duration;
 import java.time.ZoneId;
+import java.util.HashMap;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 import static com.ververica.cdc.connectors.mysql.source.MySqlDataSourceOptions.CHUNK_KEY_EVEN_DISTRIBUTION_FACTOR_LOWER_BOUND;
 import static com.ververica.cdc.connectors.mysql.source.MySqlDataSourceOptions.CHUNK_KEY_EVEN_DISTRIBUTION_FACTOR_UPPER_BOUND;
@@ -56,6 +60,7 @@ import static com.ververica.cdc.connectors.mysql.source.MySqlDataSourceOptions.H
 import static com.ververica.cdc.connectors.mysql.source.MySqlDataSourceOptions.PASSWORD;
 import static com.ververica.cdc.connectors.mysql.source.MySqlDataSourceOptions.PORT;
 import static com.ververica.cdc.connectors.mysql.source.MySqlDataSourceOptions.SCAN_INCREMENTAL_CLOSE_IDLE_READER_ENABLED;
+import static com.ververica.cdc.connectors.mysql.source.MySqlDataSourceOptions.SCAN_INCREMENTAL_SNAPSHOT_CHUNK_KEY_COLUMN;
 import static com.ververica.cdc.connectors.mysql.source.MySqlDataSourceOptions.SCAN_INCREMENTAL_SNAPSHOT_CHUNK_SIZE;
 import static com.ververica.cdc.connectors.mysql.source.MySqlDataSourceOptions.SCAN_SNAPSHOT_FETCH_SIZE;
 import static com.ververica.cdc.connectors.mysql.source.MySqlDataSourceOptions.SCAN_STARTUP_MODE;
@@ -157,6 +162,34 @@ public class MySqlDataSourceFactory implements DataSourceFactory {
         }
         configFactory.tableList(capturedTables);
 
+        String chunkKeyColumns = config.get(SCAN_INCREMENTAL_SNAPSHOT_CHUNK_KEY_COLUMN);
+        if (chunkKeyColumns != null) {
+            Map<ObjectPath, String> chunkKeyColumnMap = new HashMap<>();
+            List<TableId> tableIds =
+                    MySqlSchemaUtils.listTables(configFactory.createConfig(0), null);
+            for (String chunkKeyColumn : chunkKeyColumns.split(";")) {
+                String[] splits = chunkKeyColumn.split(":");
+                if (splits.length == 2) {
+                    Selectors chunkKeySelector =
+                            new Selectors.SelectorsBuilder().includeTables(splits[0]).build();
+                    List<ObjectPath> tableList =
+                            getChunkKeyColumnTableList(tableIds, chunkKeySelector);
+                    for (ObjectPath table : tableList) {
+                        chunkKeyColumnMap.put(table, splits[1]);
+                    }
+                } else {
+                    throw new IllegalArgumentException(SCAN_INCREMENTAL_SNAPSHOT_CHUNK_KEY_COLUMN.key()
+                            + " = "
+                            + chunkKeyColumns
+                            + " failed to be parsed in this part '"
+                            + chunkKeyColumn
+                            + "'.");
+                }
+            }
+            LOG.info("Add chunkKeyColumn {}.", chunkKeyColumnMap);
+            configFactory.chunkKeyColumn(chunkKeyColumnMap);
+        }
+
         return new MySqlDataSource(configFactory);
     }
 
@@ -192,6 +225,7 @@ public class MySqlDataSourceFactory implements DataSourceFactory {
         options.add(CHUNK_KEY_EVEN_DISTRIBUTION_FACTOR_LOWER_BOUND);
         options.add(CONNECT_MAX_RETRIES);
         options.add(SCAN_INCREMENTAL_CLOSE_IDLE_READER_ENABLED);
+        options.add(SCAN_INCREMENTAL_SNAPSHOT_CHUNK_KEY_COLUMN);
         options.add(HEARTBEAT_INTERVAL);
         options.add(SCHEMA_CHANGE_ENABLED);
         return options;
@@ -213,6 +247,14 @@ public class MySqlDataSourceFactory implements DataSourceFactory {
                 .filter(selectors::isMatch)
                 .map(TableId::toString)
                 .toArray(String[]::new);
+    }
+
+    private static List<ObjectPath> getChunkKeyColumnTableList(
+            List<TableId> tableIds, Selectors selectors) {
+        return tableIds.stream()
+                .filter(selectors::isMatch)
+                .map(tableId -> new ObjectPath(tableId.getSchemaName(), tableId.getTableName()))
+                .collect(Collectors.toList());
     }
 
     private static StartupOptions getStartupOptions(Configuration config) {

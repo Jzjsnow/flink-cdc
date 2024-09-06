@@ -29,12 +29,15 @@ import java.util.Map;
 import static com.ververica.cdc.connectors.mysql.source.MySqlDataSourceOptions.HOSTNAME;
 import static com.ververica.cdc.connectors.mysql.source.MySqlDataSourceOptions.PASSWORD;
 import static com.ververica.cdc.connectors.mysql.source.MySqlDataSourceOptions.PORT;
+import static com.ververica.cdc.connectors.mysql.source.MySqlDataSourceOptions.SCAN_INCREMENTAL_SNAPSHOT_CHUNK_KEY_COLUMN;
 import static com.ververica.cdc.connectors.mysql.source.MySqlDataSourceOptions.TABLES;
 import static com.ververica.cdc.connectors.mysql.source.MySqlDataSourceOptions.USERNAME;
 import static com.ververica.cdc.connectors.mysql.testutils.MySqSourceTestUtils.TEST_PASSWORD;
 import static com.ververica.cdc.connectors.mysql.testutils.MySqSourceTestUtils.TEST_USER;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+
+import org.apache.flink.table.catalog.ObjectPath;
 
 /** Unit tests for {@link MySqlDataSourceFactory}. */
 public class MySqlDataSourceFactoryTest extends MySqlSourceTestBase {
@@ -75,6 +78,40 @@ public class MySqlDataSourceFactoryTest extends MySqlSourceTestBase {
         assertThatThrownBy(() -> factory.createDataSource(context))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("Cannot find any table by the option 'tables' = " + tables);
+    }
+
+    @Test
+    public void testAddChunkKeyColumns() {
+        inventoryDatabase.createAndInitialize();
+        Map<String, String> options = new HashMap<>();
+        options.put(HOSTNAME.key(), MYSQL_CONTAINER.getHost());
+        options.put(PORT.key(), String.valueOf(MYSQL_CONTAINER.getDatabasePort()));
+        options.put(USERNAME.key(), TEST_USER);
+        options.put(PASSWORD.key(), TEST_PASSWORD);
+        options.put(TABLES.key(), inventoryDatabase.getDatabaseName() + ".\\.*");
+        options.put(
+                SCAN_INCREMENTAL_SNAPSHOT_CHUNK_KEY_COLUMN.key(),
+                inventoryDatabase.getDatabaseName()
+                        + ".multi_max_\\.*:order_id;"
+                        + inventoryDatabase.getDatabaseName()
+                        + ".products:id;");
+        Factory.Context context = new MockContext(Configuration.fromMap(options));
+
+        MySqlDataSourceFactory factory = new MySqlDataSourceFactory();
+        MySqlDataSource dataSource = (MySqlDataSource) factory.createDataSource(context);
+        ObjectPath multiMaxTable =
+                new ObjectPath(inventoryDatabase.getDatabaseName(), "multi_max_table");
+        ObjectPath productsTable = new ObjectPath(inventoryDatabase.getDatabaseName(), "products");
+
+        assertThat(dataSource.getSourceConfig().getChunkKeyColumns())
+                .isNotEmpty()
+                .isEqualTo(
+                        new HashMap<ObjectPath, String>() {
+                            {
+                                put(multiMaxTable, "order_id");
+                                put(productsTable, "id");
+                            }
+                        });
     }
 
     class MockContext implements Factory.Context {
