@@ -73,45 +73,6 @@ public final class BinaryRecordData extends BinarySection implements RecordData,
         return ((arity + 63 + HEADER_SIZE_IN_BITS) / 64) * 8;
     }
 
-    public static int calculateFixPartSizeInBytes(int arity) {
-        return calculateBitSetWidthInBytes(arity) + 8 * arity;
-    }
-
-    /**
-     * If it is a fixed-length field, we can call this BinaryRecordData's setXX method for in-place
-     * updates. If it is variable-length field, can't use this method, because the underlying data
-     * is stored continuously.
-     */
-    public static boolean isInFixedLengthPart(DataType type) {
-        switch (type.getTypeRoot()) {
-            case BOOLEAN:
-            case TINYINT:
-            case SMALLINT:
-            case INTEGER:
-            case DATE:
-            case TIME_WITHOUT_TIME_ZONE:
-            case BIGINT:
-            case FLOAT:
-            case DOUBLE:
-                return true;
-            case DECIMAL:
-                return DecimalData.isCompact(((DecimalType) type).getPrecision());
-            case TIMESTAMP_WITHOUT_TIME_ZONE:
-                return TimestampData.isCompact(((TimestampType) type).getPrecision());
-            case TIMESTAMP_WITH_LOCAL_TIME_ZONE:
-                return LocalZonedTimestampData.isCompact(
-                        ((LocalZonedTimestampType) type).getPrecision());
-            case TIMESTAMP_WITH_TIME_ZONE:
-                return ZonedTimestampData.isCompact(((ZonedTimestampType) type).getPrecision());
-            default:
-                return false;
-        }
-    }
-
-    public static boolean isMutable(DataType type) {
-        return isInFixedLengthPart(type) || type.getTypeRoot() == DECIMAL;
-    }
-
     private final int arity;
     private final int nullBitsSizeInBytes;
 
@@ -214,10 +175,6 @@ public final class BinaryRecordData extends BinarySection implements RecordData,
     public TimestampData getTimestamp(int pos, int precision) {
         assertIndexIsValid(pos);
 
-        if (TimestampData.isCompact(precision)) {
-            return TimestampData.fromMillis(segments[0].getLong(getFieldOffset(pos)));
-        }
-
         int fieldOffset = getFieldOffset(pos);
         final long offsetAndNanoOfMilli = segments[0].getLong(fieldOffset);
         return BinarySegmentUtils.readTimestampData(segments, offset, offsetAndNanoOfMilli);
@@ -233,11 +190,6 @@ public final class BinaryRecordData extends BinarySection implements RecordData,
     @Override
     public LocalZonedTimestampData getLocalZonedTimestampData(int pos, int precision) {
         assertIndexIsValid(pos);
-
-        if (LocalZonedTimestampData.isCompact(precision)) {
-            return LocalZonedTimestampData.fromEpochMillis(
-                    segments[0].getLong(getFieldOffset(pos)));
-        }
 
         int fieldOffset = getFieldOffset(pos);
         final long offsetAndNanoOfMilli = segments[0].getLong(fieldOffset);
