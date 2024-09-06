@@ -21,6 +21,9 @@ import com.ververica.cdc.cli.utils.FlinkEnvironmentUtils;
 import com.ververica.cdc.common.annotation.VisibleForTesting;
 import com.ververica.cdc.common.configuration.Configuration;
 import com.ververica.cdc.composer.PipelineExecution;
+import org.apache.flink.runtime.jobgraph.RestoreMode;
+import org.apache.flink.runtime.jobgraph.SavepointConfigOptions;
+import org.apache.flink.runtime.jobgraph.SavepointRestoreSettings;
 import org.apache.commons.cli.CommandLine;
 import org.apache.commons.cli.CommandLineParser;
 import org.apache.commons.cli.DefaultParser;
@@ -37,6 +40,10 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.Optional;
 import java.util.stream.Collectors;
+
+import static com.ververica.cdc.cli.CliFrontendOptions.SAVEPOINT_ALLOW_NON_RESTORED_OPTION;
+import static com.ververica.cdc.cli.CliFrontendOptions.SAVEPOINT_CLAIM_MODE;
+import static com.ververica.cdc.cli.CliFrontendOptions.SAVEPOINT_PATH_OPTION;
 
 /** The frontend entrypoint for the command-line interface of Flink CDC. */
 public class CliFrontend {
@@ -88,6 +95,9 @@ public class CliFrontend {
         Path flinkHome = getFlinkHome(commandLine);
         Configuration flinkConfig = FlinkEnvironmentUtils.loadFlinkConfiguration(flinkHome);
 
+        // Savepoint
+        SavepointRestoreSettings savepointSettings = createSavepointRestoreSettings(commandLine);
+
         // Additional JARs
         List<Path> additionalJars =
                 Arrays.stream(
@@ -103,7 +113,31 @@ public class CliFrontend {
                 flinkConfig,
                 globalPipelineConfig,
                 commandLine.hasOption(CliFrontendOptions.USE_MINI_CLUSTER),
-                additionalJars);
+                additionalJars,
+                savepointSettings);
+    }
+
+    private static SavepointRestoreSettings createSavepointRestoreSettings(
+            CommandLine commandLine) {
+        if (commandLine.hasOption(SAVEPOINT_PATH_OPTION.getOpt())) {
+            String savepointPath = commandLine.getOptionValue(SAVEPOINT_PATH_OPTION.getOpt());
+            boolean allowNonRestoredState =
+                    commandLine.hasOption(SAVEPOINT_ALLOW_NON_RESTORED_OPTION.getOpt());
+            final RestoreMode restoreMode;
+            if (commandLine.hasOption(SAVEPOINT_CLAIM_MODE)) {
+                restoreMode =
+                        org.apache.flink.configuration.ConfigurationUtils.convertValue(
+                                commandLine.getOptionValue(SAVEPOINT_CLAIM_MODE),
+                                RestoreMode.class);
+            } else {
+                restoreMode = SavepointConfigOptions.RESTORE_MODE.defaultValue();
+            }
+            // allowNonRestoredState is always false because all operators are predefined.
+            return SavepointRestoreSettings.forPath(
+                    savepointPath, allowNonRestoredState, restoreMode);
+        } else {
+            return SavepointRestoreSettings.none();
+        }
     }
 
     private static Path getFlinkHome(CommandLine commandLine) {
