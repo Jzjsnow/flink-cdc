@@ -16,8 +16,11 @@
 
 package com.ververica.cdc.cli.utils;
 
+import org.apache.flink.configuration.DeploymentOptions;
 import org.apache.flink.runtime.jobgraph.SavepointRestoreSettings;
+import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
 
+import com.ververica.cdc.cli.application.YarnDeploymentTargetEnum;
 import com.ververica.cdc.common.configuration.Configuration;
 import com.ververica.cdc.composer.flink.FlinkPipelineComposer;
 
@@ -31,8 +34,22 @@ public class FlinkEnvironmentUtils {
     private static final String FLINK_CONF_FILENAME = "flink-conf.yaml";
 
     public static Configuration loadFlinkConfiguration(Path flinkHome) throws Exception {
-        Path flinkConfPath = flinkHome.resolve(FLINK_CONF_DIR).resolve(FLINK_CONF_FILENAME);
+        Path flinkConfPath = getFlinkConfigurationDir(flinkHome).resolve(FLINK_CONF_FILENAME);
         return ConfigurationUtils.loadMapFormattedConfig(flinkConfPath);
+    }
+
+    public static Path getFlinkConfigurationDir(Path flinkHome) {
+        return flinkHome.resolve(FLINK_CONF_DIR);
+    }
+
+    public static boolean checkIfRunningOnApplicationMaster() {
+        StreamExecutionEnvironment env = StreamExecutionEnvironment.getExecutionEnvironment();
+        if (YarnDeploymentTargetEnum.EMBEDDED
+                .getName()
+                .equalsIgnoreCase(env.getConfiguration().get(DeploymentOptions.TARGET))) {
+            return true;
+        }
+        return false;
     }
 
     public static FlinkPipelineComposer createComposer(
@@ -40,6 +57,9 @@ public class FlinkEnvironmentUtils {
             Configuration flinkConfig,
             List<Path> additionalJars,
             SavepointRestoreSettings savepointSettings) {
+        if (checkIfRunningOnApplicationMaster()) {
+            return FlinkPipelineComposer.ofMiniCluster();
+        }
         if (useMiniCluster) {
             return FlinkPipelineComposer.ofMiniCluster();
         }

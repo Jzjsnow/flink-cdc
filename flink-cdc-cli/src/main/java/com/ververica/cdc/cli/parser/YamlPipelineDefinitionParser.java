@@ -26,6 +26,7 @@ import com.ververica.cdc.cli.encryptor.EncryptorPropertyResolver;
 import com.ververica.cdc.cli.encryptor.resource.ClassPathResource;
 import com.ververica.cdc.cli.encryptor.resource.FileSystemResource;
 import com.ververica.cdc.cli.encryptor.resource.Resource;
+import com.ververica.cdc.cli.utils.FlinkEnvironmentUtils;
 import com.ververica.cdc.common.configuration.Configuration;
 import com.ververica.cdc.common.pipeline.PipelineOptions;
 import com.ververica.cdc.composer.definition.PipelineDef;
@@ -100,16 +101,24 @@ public class YamlPipelineDefinitionParser implements PipelineDefinitionParser {
                     && !pipelineConfig.contains(PipelineOptions.ENCRYPTOR_PRIVATE_KEY_STRING)) {
                 String privateKeyLocation =
                         pipelineConfig.get(PipelineOptions.ENCRYPTOR_PRIVATE_KEY_LOCATION);
-                FileSystemResource fileResource = new FileSystemResource(privateKeyLocation);
-                // Check if the private key exists in the filesystem, and add it to the classpath to
-                // ensure that it will be loaded (Adding private key to the classpath is also to
-                // adapt it to read the key in application mode.)
-                if (!fileResource.exists()) {
-                    LOG.error("Private key not found: " + privateKeyLocation);
-                    throw new IllegalStateException("Private key not found: " + privateKeyLocation);
+
+                if (FlinkEnvironmentUtils.checkIfRunningOnApplicationMaster()) {
+                    // private key file is already shipped to cluster and in class resources.
+                    LOG.info("Using private key in application mode");
+                } else {
+                    FileSystemResource fileResource = new FileSystemResource(privateKeyLocation);
+                    // Check if the private key exists in the filesystem, and add it to the
+                    // classpath to
+                    // ensure that it will be loaded (Adding private key to the classpath is also to
+                    // adapt it to read the key in application mode.)
+                    if (!fileResource.exists()) {
+                        LOG.error("Private key not found: " + privateKeyLocation);
+                        throw new IllegalStateException(
+                                "Private key not found: " + privateKeyLocation);
+                    }
+                    // add it to the classpath
+                    addFileToClassPathResources(fileResource.getFile());
                 }
-                // add it to the classpath
-                addFileToClassPathResources(fileResource.getFile());
             }
             // if encryptor is enabled, decrypt and set the password for the source and sink
             EncryptorPropertyResolver encryptor = new EncryptorPropertyResolver(pipelineConfig);

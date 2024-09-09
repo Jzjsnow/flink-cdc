@@ -16,19 +16,30 @@
 
 package com.ververica.cdc.cli;
 
+import org.apache.flink.client.deployment.ClusterClientServiceLoader;
+import org.apache.flink.client.deployment.DefaultClusterClientServiceLoader;
+import org.apache.flink.client.deployment.application.ApplicationConfiguration;
+import org.apache.flink.client.deployment.application.cli.ApplicationClusterDeployer;
+import org.apache.flink.configuration.DeploymentOptionsInternal;
 import org.apache.flink.runtime.jobgraph.SavepointRestoreSettings;
 
+import com.ververica.cdc.cli.application.YarnApplicationOptions;
 import com.ververica.cdc.cli.parser.PipelineDefinitionParser;
 import com.ververica.cdc.cli.parser.YamlPipelineDefinitionParser;
 import com.ververica.cdc.cli.utils.FlinkEnvironmentUtils;
 import com.ververica.cdc.common.annotation.VisibleForTesting;
 import com.ververica.cdc.common.configuration.Configuration;
+import com.ververica.cdc.common.pipeline.PipelineOptions;
 import com.ververica.cdc.composer.PipelineComposer;
 import com.ververica.cdc.composer.PipelineExecution;
 import com.ververica.cdc.composer.definition.PipelineDef;
 
 import java.nio.file.Path;
+import java.util.Collections;
 import java.util.List;
+import java.util.Objects;
+
+import static com.ververica.cdc.cli.CliFrontend.addShipFile;
 
 /** Executor for doing the composing and submitting logic for {@link CliFrontend}. */
 public class CliExecutor {
@@ -43,6 +54,9 @@ public class CliExecutor {
 
     private final SavepointRestoreSettings savepointSettings;
 
+    private final boolean useApplicationMode;
+    private final ApplicationConfiguration applicationConfiguration;
+
     public CliExecutor(
             Path pipelineDefPath,
             Configuration flinkConfig,
@@ -50,12 +64,34 @@ public class CliExecutor {
             boolean useMiniCluster,
             List<Path> additionalJars,
             SavepointRestoreSettings savepointSettings) {
+        this(
+                pipelineDefPath,
+                flinkConfig,
+                globalPipelineConfig,
+                useMiniCluster,
+                additionalJars,
+                savepointSettings,
+                false,
+                null);
+    }
+
+    public CliExecutor(
+            Path pipelineDefPath,
+            Configuration flinkConfig,
+            Configuration globalPipelineConfig,
+            boolean useMiniCluster,
+            List<Path> additionalJars,
+            SavepointRestoreSettings savepointSettings,
+            boolean useApplicationMode,
+            ApplicationConfiguration applicationConfiguration) {
         this.pipelineDefPath = pipelineDefPath;
         this.flinkConfig = flinkConfig;
         this.globalPipelineConfig = globalPipelineConfig;
         this.useMiniCluster = useMiniCluster;
         this.additionalJars = additionalJars;
         this.savepointSettings = savepointSettings;
+        this.useApplicationMode = useApplicationMode;
+        this.applicationConfiguration = applicationConfiguration;
     }
 
     public PipelineExecution.ExecutionInfo run() throws Exception {
@@ -63,6 +99,13 @@ public class CliExecutor {
         PipelineDefinitionParser pipelineDefinitionParser = new YamlPipelineDefinitionParser();
         PipelineDef pipelineDef =
                 pipelineDefinitionParser.parse(pipelineDefPath, globalPipelineConfig);
+
+        // If run the pipeline in application mode, submit an application for execution in
+        // "Application Mode" with configurations
+        if (useApplicationMode) {
+            String clusterId = submitApplication(pipelineDef);
+            return new PipelineExecution.ExecutionInfo(clusterId, "Application submitted");
+        }
 
         // Create composer
         PipelineComposer composer = getComposer();
@@ -80,6 +123,62 @@ public class CliExecutor {
                     useMiniCluster, flinkConfig, additionalJars, savepointSettings);
         }
         return composer;
+    }
+
+    /**
+     * submit an flink application for execution in "Application Mode" with configurations.
+     *
+     * @param pipelineDef
+     * @return clusterId
+     * @throws Exception
+     */
+    private String submitApplication(PipelineDef pipelineDef) throws Exception {
+        ClusterClientServiceLoader clusterClientServiceLoader =
+                new DefaultClusterClientServiceLoader();
+        ApplicationClusterDeployer deployer =
+                new ApplicationClusterDeployer(clusterClientServiceLoader);
+
+        // If the pipeline definition file is encrypted and requires private key for decryption,
+        // ship the private key file to the YARN cluster
+        if (pipelineDef.getIsEncrypted()
+                && pipelineDef
+                        .getConfig()
+                        .contains(PipelineOptions.ENCRYPTOR_PRIVATE_KEY_LOCATION)) {
+            String privateKeyFile =
+                    pipelineDef.getConfig().get(PipelineOptions.ENCRYPTOR_PRIVATE_KEY_LOCATION);
+            addShipFile(privateKeyFile, flinkConfig);
+        }
+
+        // convert configuration from flinkcdc to flink configuration
+        org.apache.flink.configuration.Configuration flinkApplicationConf =
+                org.apache.flink.configuration.Configuration.fromMap(flinkConfig.toMap());
+        SavepointRestoreSettings.toConfiguration(savepointSettings, flinkApplicationConf);
+
+        // set log directory where log4j.properties is located
+        flinkApplicationConf.set(
+                DeploymentOptionsInternal.CONF_DIR,
+                flinkConfig.get(YarnApplicationOptions.APPLICATION_LOG_CONFIG_DIR));
+
+        // set flinkcdc-dist jar as pipeline.jars
+        String jarName =
+                CliFrontend.class
+                        .getProtectionDomain()
+                        .getCodeSource()
+                        .getLocation()
+                        .toURI()
+                        .toString();
+        flinkApplicationConf.set(
+                org.apache.flink.configuration.PipelineOptions.JARS,
+                Collections.singletonList(jarName));
+
+        // run application
+        deployer.run(flinkApplicationConf, applicationConfiguration);
+
+        return Objects.requireNonNull(
+                        clusterClientServiceLoader
+                                .getClusterClientFactory(flinkApplicationConf)
+                                .getClusterId(flinkApplicationConf))
+                .toString();
     }
 
     @VisibleForTesting

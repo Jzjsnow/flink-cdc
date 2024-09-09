@@ -16,10 +16,13 @@
 
 package com.ververica.cdc.cli;
 
+import org.apache.flink.client.deployment.application.ApplicationConfiguration;
 import org.apache.flink.runtime.jobgraph.RestoreMode;
 import org.apache.flink.runtime.jobgraph.SavepointConfigOptions;
 import org.apache.flink.runtime.jobgraph.SavepointRestoreSettings;
 
+import com.ververica.cdc.cli.application.YarnApplicationOptions;
+import com.ververica.cdc.cli.application.YarnDeploymentTargetEnum;
 import com.ververica.cdc.cli.utils.ConfigurationUtils;
 import com.ververica.cdc.cli.utils.FlinkEnvironmentUtils;
 import com.ververica.cdc.common.annotation.VisibleForTesting;
@@ -37,8 +40,10 @@ import java.io.FileNotFoundException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.stream.Collectors;
 
@@ -92,6 +97,23 @@ public class CliFrontend {
         // Global pipeline configuration
         Configuration globalPipelineConfig = getGlobalConfig(commandLine);
 
+        // Check if running on the cluster in application mode
+        if (FlinkEnvironmentUtils.checkIfRunningOnApplicationMaster()) {
+            // When running on the master, the flink configurations and save point settings are
+            // already stored in the
+            // StreamExecutionEnvironment, so passing a null value when constructing CliExecutor is
+            // sufficient
+            LOG.info("Running on cluster, skip loading Flink configurations.");
+
+            // Build executor
+            return new CliExecutor(
+                    pipelineDefPath,
+                    null,
+                    globalPipelineConfig,
+                    commandLine.hasOption(CliFrontendOptions.USE_MINI_CLUSTER),
+                    new ArrayList<>(),
+                    null);
+        }
         // Load Flink environment
         Path flinkHome = getFlinkHome(commandLine);
         Configuration flinkConfig = FlinkEnvironmentUtils.loadFlinkConfiguration(flinkHome);
@@ -108,6 +130,30 @@ public class CliFrontend {
                         .map(Paths::get)
                         .collect(Collectors.toList());
 
+        // Check if going to run the pipeline in application mode
+        boolean useApplicationMode =
+                commandLine.hasOption(CliFrontendOptions.USE_YARN_APPLICATION_MODE)
+                        || YarnDeploymentTargetEnum.APPLICATION
+                                .getName()
+                                .equalsIgnoreCase(flinkConfig.get(YarnApplicationOptions.TARGET));
+        LOG.info("Use application mode: " + useApplicationMode);
+
+        if (useApplicationMode) {
+            flinkConfig.set(
+                    YarnApplicationOptions.TARGET, YarnDeploymentTargetEnum.APPLICATION.getName());
+            final ApplicationConfiguration applicationConfiguration =
+                    createApplicationConfiguration(
+                            commandLine, pipelineDefPath, additionalJars, flinkHome, flinkConfig);
+            return new CliExecutor(
+                    pipelineDefPath,
+                    flinkConfig,
+                    globalPipelineConfig,
+                    commandLine.hasOption(CliFrontendOptions.USE_MINI_CLUSTER),
+                    additionalJars,
+                    savepointSettings,
+                    true,
+                    applicationConfiguration);
+        }
         // Build executor
         return new CliExecutor(
                 pipelineDefPath,
@@ -116,6 +162,73 @@ public class CliFrontend {
                 commandLine.hasOption(CliFrontendOptions.USE_MINI_CLUSTER),
                 additionalJars,
                 savepointSettings);
+    }
+
+    /** create a CliExecutor to submit a Flink application on the client. */
+    private static ApplicationConfiguration createApplicationConfiguration(
+            CommandLine commandLine,
+            Path pipelineDefPath,
+            List<Path> additionalJars,
+            Path flinkHome,
+            Configuration flinkConfig) {
+        // running on the client and submitting a Flink application
+
+        String pipelineFileName = pipelineDefPath.toFile().getName();
+        Path globalConfigPath = getGlobalConfigPath(commandLine);
+
+        // create the list of files and/or directories to be shipped to the YARN cluster
+        addShipFile(pipelineDefPath.toString(), flinkConfig);
+        addShipFiles(
+                additionalJars.stream().map(Path::toString).collect(Collectors.toList()),
+                flinkConfig);
+        if (Objects.nonNull(globalConfigPath)) {
+            addShipFile(globalConfigPath.toString(), flinkConfig);
+        }
+
+        // reorganize the program arguments for application runs on the cluster
+        List<String> applicationArgs = new ArrayList<>();
+        applicationArgs.add(pipelineFileName);
+        if (Objects.nonNull(globalConfigPath)) {
+            applicationArgs.add(
+                    "--"
+                            + CliFrontendOptions.GLOBAL_CONFIG.getLongOpt()
+                            + "="
+                            + globalConfigPath.getFileName());
+        }
+
+        String[] programArguments = applicationArgs.toArray(new String[0]);
+        LOG.info("Arguments to run program on the cluster: " + Arrays.toString(programArguments));
+        final ApplicationConfiguration applicationConfiguration =
+                new ApplicationConfiguration(programArguments, YarnApplicationOptions.CLASS_NAME);
+
+        Path flinkConfHome = FlinkEnvironmentUtils.getFlinkConfigurationDir(flinkHome);
+        flinkConfig.set(
+                YarnApplicationOptions.APPLICATION_LOG_CONFIG_DIR, flinkConfHome.toString());
+
+        return applicationConfiguration;
+    }
+
+    public static void addShipFile(String fileToShip, Configuration flinkConfig) {
+        List<String> shipFiles =
+                flinkConfig.contains(YarnApplicationOptions.SHIP_FILES)
+                        ? flinkConfig.get(YarnApplicationOptions.SHIP_FILES)
+                        : new ArrayList<>();
+        shipFiles.add(fileToShip);
+        flinkConfig.set(YarnApplicationOptions.SHIP_FILES, shipFiles);
+        LOG.info("Add File {} to be shipped to the YARN cluster: ", fileToShip);
+    }
+
+    public static void addShipFiles(List<String> filesToShip, Configuration flinkConfig) {
+        if (filesToShip.isEmpty()) {
+            return;
+        }
+        List<String> shipFiles =
+                flinkConfig.contains(YarnApplicationOptions.SHIP_FILES)
+                        ? flinkConfig.get(YarnApplicationOptions.SHIP_FILES)
+                        : new ArrayList<>();
+        shipFiles.addAll(filesToShip);
+        flinkConfig.set(YarnApplicationOptions.SHIP_FILES, shipFiles);
+        LOG.info("Add Files {} to be shipped to the YARN cluster: ", filesToShip);
     }
 
     private static SavepointRestoreSettings createSavepointRestoreSettings(
@@ -164,11 +277,24 @@ public class CliFrontend {
 
     private static Configuration getGlobalConfig(CommandLine commandLine) throws Exception {
         // Try to get global config path from command line
+        Path globalConfigPath = getGlobalConfigPath(commandLine);
+        if (globalConfigPath != null) {
+            return ConfigurationUtils.loadMapFormattedConfig(globalConfigPath);
+        }
+
+        // Fallback to empty configuration
+        LOG.warn(
+                "Cannot find global configuration in command-line or FLINK_CDC_HOME. Will use empty global configuration.");
+        return new Configuration();
+    }
+
+    private static Path getGlobalConfigPath(CommandLine commandLine) {
+        // Try to get global config path from command line
         String globalConfig = commandLine.getOptionValue(CliFrontendOptions.GLOBAL_CONFIG);
         if (globalConfig != null) {
             Path globalConfigPath = Paths.get(globalConfig);
             LOG.info("Using global config in command line: {}", globalConfigPath);
-            return ConfigurationUtils.loadMapFormattedConfig(globalConfigPath);
+            return globalConfigPath;
         }
 
         // Fallback to Flink CDC home
@@ -177,13 +303,11 @@ public class CliFrontend {
             Path globalConfigPath =
                     Paths.get(flinkCdcHome).resolve("conf").resolve("flink-cdc.yaml");
             LOG.info("Using global config in FLINK_CDC_HOME: {}", globalConfigPath);
-            return ConfigurationUtils.loadMapFormattedConfig(globalConfigPath);
+            return globalConfigPath;
         }
 
         // Fallback to empty configuration
-        LOG.warn(
-                "Cannot find global configuration in command-line or FLINK_CDC_HOME. Will use empty global configuration.");
-        return new Configuration();
+        return null;
     }
 
     private static void printExecutionInfo(PipelineExecution.ExecutionInfo info) {

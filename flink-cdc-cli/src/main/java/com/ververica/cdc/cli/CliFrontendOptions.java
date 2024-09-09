@@ -52,6 +52,13 @@ public class CliFrontendOptions {
                     .desc("Use Flink MiniCluster to run the pipeline")
                     .build();
 
+    public static final Option USE_YARN_APPLICATION_MODE =
+            Option.builder()
+                    .longOpt("yarn-application")
+                    .hasArg(false)
+                    .desc("Use YARN Application Mode to run the pipeline")
+                    .build();
+
     public static final Option SAVEPOINT_PATH_OPTION =
             Option.builder("s")
                     .longOpt("from-savepoint")
@@ -92,6 +99,7 @@ public class CliFrontendOptions {
                 .addOption(USE_MINI_CLUSTER)
                 .addOption(SAVEPOINT_PATH_OPTION)
                 .addOption(SAVEPOINT_CLAIM_MODE)
-                .addOption(SAVEPOINT_ALLOW_NON_RESTORED_OPTION);
+                .addOption(SAVEPOINT_ALLOW_NON_RESTORED_OPTION)
+                .addOption(USE_YARN_APPLICATION_MODE);
     }
 }
