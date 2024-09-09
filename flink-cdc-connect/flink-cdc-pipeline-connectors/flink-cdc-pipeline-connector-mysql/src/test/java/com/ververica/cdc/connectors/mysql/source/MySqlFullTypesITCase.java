@@ -38,7 +38,6 @@ import com.ververica.cdc.connectors.mysql.testutils.MySqlContainer;
 import com.ververica.cdc.connectors.mysql.testutils.MySqlVersion;
 import com.ververica.cdc.connectors.mysql.testutils.RecordDataTestUtils;
 import com.ververica.cdc.connectors.mysql.testutils.UniqueDatabase;
-
 import org.assertj.core.api.Assertions;
 import org.junit.AfterClass;
 import org.junit.Before;
@@ -248,36 +247,36 @@ public class MySqlFullTypesITCase extends MySqlSourceTestBase {
 
         Object[] expectedSnapshot =
                 new Object[] {
-                        DecimalData.fromBigDecimal(new BigDecimal("1"), 20, 0),
-                        DecimalData.fromBigDecimal(new BigDecimal("123.4"), 6, 2),
-                        DecimalData.fromBigDecimal(new BigDecimal("1234.5"), 9, 4),
-                        DecimalData.fromBigDecimal(new BigDecimal("1234.56"), 20, 4),
-                        64800000,
-                        64822100,
-                        64822100,
-                        TimestampData.fromTimestamp(Timestamp.valueOf("2020-07-17 18:00:00")),
-                        TimestampData.fromTimestamp(Timestamp.valueOf("2020-07-17 18:00:22")),
-                        TimestampData.fromTimestamp(Timestamp.valueOf("2020-07-17 18:00:22")),
-                        LocalZonedTimestampData.fromInstant(toInstant("2020-07-17 18:00:00")),
-                        LocalZonedTimestampData.fromInstant(toInstant("2020-07-17 18:00:22")),
-                        LocalZonedTimestampData.fromInstant(toInstant("2020-07-17 18:00:22"))
+                    DecimalData.fromBigDecimal(new BigDecimal("1"), 20, 0),
+                    DecimalData.fromBigDecimal(new BigDecimal("123.4"), 6, 2),
+                    DecimalData.fromBigDecimal(new BigDecimal("1234.5"), 9, 4),
+                    DecimalData.fromBigDecimal(new BigDecimal("1234.56"), 20, 4),
+                    64800000,
+                    64822100,
+                    64822100,
+                    TimestampData.fromTimestamp(Timestamp.valueOf("2020-07-17 18:00:00")),
+                    TimestampData.fromTimestamp(Timestamp.valueOf("2020-07-17 18:00:22")),
+                    TimestampData.fromTimestamp(Timestamp.valueOf("2020-07-17 18:00:22")),
+                    LocalZonedTimestampData.fromInstant(toInstant("2020-07-17 18:00:00")),
+                    LocalZonedTimestampData.fromInstant(toInstant("2020-07-17 18:00:22")),
+                    LocalZonedTimestampData.fromInstant(toInstant("2020-07-17 18:00:22"))
                 };
 
         Object[] expectedStreamRecord =
                 new Object[] {
-                        DecimalData.fromBigDecimal(new BigDecimal("1"), 20, 0),
-                        DecimalData.fromBigDecimal(new BigDecimal("123.4"), 6, 2),
-                        DecimalData.fromBigDecimal(new BigDecimal("1234.5"), 9, 4),
-                        DecimalData.fromBigDecimal(new BigDecimal("1234.56"), 20, 4),
-                        64800000,
-                        64822100,
-                        null,
-                        TimestampData.fromTimestamp(Timestamp.valueOf("2020-07-17 18:00:00")),
-                        TimestampData.fromTimestamp(Timestamp.valueOf("2020-07-17 18:00:22")),
-                        TimestampData.fromTimestamp(Timestamp.valueOf("2020-07-17 18:00:22")),
-                        LocalZonedTimestampData.fromInstant(toInstant("2020-07-17 18:00:00")),
-                        LocalZonedTimestampData.fromInstant(toInstant("2020-07-17 18:00:22")),
-                        LocalZonedTimestampData.fromInstant(toInstant("2020-07-17 18:00:22"))
+                    DecimalData.fromBigDecimal(new BigDecimal("1"), 20, 0),
+                    DecimalData.fromBigDecimal(new BigDecimal("123.4"), 6, 2),
+                    DecimalData.fromBigDecimal(new BigDecimal("1234.5"), 9, 4),
+                    DecimalData.fromBigDecimal(new BigDecimal("1234.56"), 20, 4),
+                    64800000,
+                    64822100,
+                    null,
+                    TimestampData.fromTimestamp(Timestamp.valueOf("2020-07-17 18:00:00")),
+                    TimestampData.fromTimestamp(Timestamp.valueOf("2020-07-17 18:00:22")),
+                    TimestampData.fromTimestamp(Timestamp.valueOf("2020-07-17 18:00:22")),
+                    LocalZonedTimestampData.fromInstant(toInstant("2020-07-17 18:00:00")),
+                    LocalZonedTimestampData.fromInstant(toInstant("2020-07-17 18:00:22")),
+                    LocalZonedTimestampData.fromInstant(toInstant("2020-07-17 18:00:22"))
                 };
 
         database.createAndInitialize();
@@ -297,7 +296,7 @@ public class MySqlFullTypesITCase extends MySqlSourceTestBase {
                 .isEqualTo(expectedSnapshot);
 
         try (Connection connection = database.getJdbcConnection();
-             Statement statement = connection.createStatement()) {
+                Statement statement = connection.createStatement()) {
             statement.execute("UPDATE precision_types SET time_6_c = null WHERE id = 1;");
         }
 

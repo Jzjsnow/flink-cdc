@@ -35,11 +35,15 @@ public class HudiSInkUtils {
         org.apache.hadoop.conf.Configuration hadoopConf =
                 new org.apache.hadoop.conf.Configuration();
         hadoopConf.set("fs.hdfs.impl.disable.cache", config.get(HudiDataSinkOptions.HDFS_CACHE));
-        hadoopConf.set("dfs.client.use.datanode.hostname", config.get(HudiDataSinkOptions.USE_DATANODE_HOSTNAME));
-        hadoopConf.set("dfs.namenode.kerberos.principal.pattern", config.get(HudiDataSinkOptions.KERBEROS_PRINCIPAL_PATTERN));
-        String prefix="option.hadoop.";
+        hadoopConf.set(
+                "dfs.client.use.datanode.hostname",
+                config.get(HudiDataSinkOptions.USE_DATANODE_HOSTNAME));
+        hadoopConf.set(
+                "dfs.namenode.kerberos.principal.pattern",
+                config.get(HudiDataSinkOptions.KERBEROS_PRINCIPAL_PATTERN));
+        String prefix = "option.hadoop.";
         HashMap<String, String> map = new HashMap<>();
-        getConfigMap(map,prefix,config);
+        getConfigMap(map, prefix, config);
         String tablePath = config.getOptional(HudiDataSinkOptions.TABLEPATH).get();
         HoodieTableMetaClient hoodieTableMetaClient = getMetaClient(hadoopConf, tablePath);
         return hoodieTableMetaClient;

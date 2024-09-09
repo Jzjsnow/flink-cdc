@@ -17,6 +17,7 @@
 package com.ververica.cdc.connectors.mysql.factory;
 
 import org.apache.flink.table.api.ValidationException;
+import org.apache.flink.table.catalog.ObjectPath;
 
 import com.ververica.cdc.common.annotation.Internal;
 import com.ververica.cdc.common.configuration.ConfigOption;
@@ -35,7 +36,6 @@ import com.ververica.cdc.connectors.mysql.source.offset.BinlogOffsetBuilder;
 import com.ververica.cdc.connectors.mysql.table.StartupOptions;
 import com.ververica.cdc.connectors.mysql.utils.MySqlSchemaUtils;
 import com.ververica.cdc.connectors.mysql.utils.OptionUtils;
-import org.apache.flink.table.catalog.ObjectPath;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -178,12 +178,13 @@ public class MySqlDataSourceFactory implements DataSourceFactory {
                         chunkKeyColumnMap.put(table, splits[1]);
                     }
                 } else {
-                    throw new IllegalArgumentException(SCAN_INCREMENTAL_SNAPSHOT_CHUNK_KEY_COLUMN.key()
-                            + " = "
-                            + chunkKeyColumns
-                            + " failed to be parsed in this part '"
-                            + chunkKeyColumn
-                            + "'.");
+                    throw new IllegalArgumentException(
+                            SCAN_INCREMENTAL_SNAPSHOT_CHUNK_KEY_COLUMN.key()
+                                    + " = "
+                                    + chunkKeyColumns
+                                    + " failed to be parsed in this part '"
+                                    + chunkKeyColumn
+                                    + "'.");
                 }
             }
             LOG.info("Add chunkKeyColumn {}.", chunkKeyColumnMap);

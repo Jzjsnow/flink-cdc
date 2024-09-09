@@ -48,13 +48,23 @@ public class OracleDataSource implements DataSource {
     @Override
     public EventSourceProvider getEventSourceProvider() {
         OracleEventDeserializer deserializer =
-                new OracleEventDeserializer(DebeziumChangelogMode.ALL, config.get(OracleDataSourceOptions.SCHEMA_CHANGE_ENABLED));
+                new OracleEventDeserializer(
+                        DebeziumChangelogMode.ALL,
+                        config.get(OracleDataSourceOptions.SCHEMA_CHANGE_ENABLED));
 
         Properties properties = new Properties();
-        properties.put("database.tablename.case.insensitive", config.get(OracleDataSourceOptions.DATABASE_TABLE_CASE_INSENSITIVE)); // 11g数据库适配
-        properties.setProperty("database.connection.adapter", config.get(OracleDataSourceOptions.DATABASE_CONNECTION_ADAPTER)); // 要同步快，这个配置必须加，不然非常慢
-        properties.setProperty("log.mining.strategy", config.get(OracleDataSourceOptions.LOG_MINING_STRATEGY));
-        properties.setProperty("log.mining.continuous.mine", config.get(OracleDataSourceOptions.LOG_MINING_CONTINUOUS_MINE));
+        properties.put(
+                "database.tablename.case.insensitive",
+                config.get(OracleDataSourceOptions.DATABASE_TABLE_CASE_INSENSITIVE)); // 11g数据库适配
+        properties.setProperty(
+                "database.connection.adapter",
+                config.get(
+                        OracleDataSourceOptions.DATABASE_CONNECTION_ADAPTER)); // 要同步快，这个配置必须加，不然非常慢
+        properties.setProperty(
+                "log.mining.strategy", config.get(OracleDataSourceOptions.LOG_MINING_STRATEGY));
+        properties.setProperty(
+                "log.mining.continuous.mine",
+                config.get(OracleDataSourceOptions.LOG_MINING_CONTINUOUS_MINE));
         DebeziumSourceFunction<Event> sourceFunction =
                 OracleSourceReader.<Event>builder()
                         .hostname(config.getOptional(OracleDataSourceOptions.HOSTNAME).get())

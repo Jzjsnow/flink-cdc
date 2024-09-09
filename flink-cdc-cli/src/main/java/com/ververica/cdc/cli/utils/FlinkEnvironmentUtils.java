@@ -16,9 +16,10 @@
 
 package com.ververica.cdc.cli.utils;
 
+import org.apache.flink.runtime.jobgraph.SavepointRestoreSettings;
+
 import com.ververica.cdc.common.configuration.Configuration;
 import com.ververica.cdc.composer.flink.FlinkPipelineComposer;
-import org.apache.flink.runtime.jobgraph.SavepointRestoreSettings;
 
 import java.nio.file.Path;
 import java.util.List;

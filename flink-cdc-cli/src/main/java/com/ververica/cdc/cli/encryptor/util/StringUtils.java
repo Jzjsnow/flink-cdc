@@ -1205,8 +1205,7 @@ public abstract class StringUtils {
      */
     public static String truncate(CharSequence charSequence, int threshold) {
         Preconditions.checkArgument(
-                threshold > 0,
-                "Truncation threshold must be a positive number: " + threshold);
+                threshold > 0, "Truncation threshold must be a positive number: " + threshold);
         if (charSequence.length() > threshold) {
             return charSequence.subSequence(0, threshold) + TRUNCATION_SUFFIX;
         }

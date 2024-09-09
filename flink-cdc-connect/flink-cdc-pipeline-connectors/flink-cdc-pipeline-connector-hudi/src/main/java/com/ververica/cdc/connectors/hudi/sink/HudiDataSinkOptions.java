@@ -58,7 +58,8 @@ public class HudiDataSinkOptions {
             ConfigOptions.key("option.pipeline.read.streaming.check-interval")
                     .intType()
                     .defaultValue(4)
-                    .withDescription("Check interval for streaming read of SECOND, default 1 minute.");
+                    .withDescription(
+                            "Check interval for streaming read of SECOND, default 1 minute.");
     public static final ConfigOption<Boolean> READ_AS_STREAMING =
             ConfigOptions.key("option.pipeline.read.streaming.enabled")
                     .booleanType()
@@ -73,17 +74,20 @@ public class HudiDataSinkOptions {
             ConfigOptions.key("option.pipeline.hoodie.datasource.write.reconcile.schema")
                     .booleanType()
                     .defaultValue(true)
-                    .withDescription("In the context of Hudi, schema reconciliation means that when writing data, Hudi will try to match and reconcile the source data schema with the Hudi table  current schema to ensure data correctness and compatibility.");
+                    .withDescription(
+                            "In the context of Hudi, schema reconciliation means that when writing data, Hudi will try to match and reconcile the source data schema with the Hudi table  current schema to ensure data correctness and compatibility.");
     public static final ConfigOption<Boolean> SCHEMA_ON_READ_ENABLE =
             ConfigOptions.key("option.pipeline.hoodie.schema.on.read.enable")
                     .booleanType()
                     .defaultValue(true)
-                    .withDescription("In the context of Hudi, schema reconciliation means that when writing data, Hudi will try to match and reconcile the source data schema with the Hudi table  current schema to ensure data correctness and compatibility.");
+                    .withDescription(
+                            "In the context of Hudi, schema reconciliation means that when writing data, Hudi will try to match and reconcile the source data schema with the Hudi table  current schema to ensure data correctness and compatibility.");
     public static final ConfigOption<Integer> CLEANER_COMMITS_RETAINED =
             ConfigOptions.key("option.pipeline.hoodie.cleaner.commits.retained")
                     .intType()
                     .defaultValue(1)
-                    .withDescription("It is used to control the number of latest commits that Hudi retains when performing a clean operation.");
+                    .withDescription(
+                            "It is used to control the number of latest commits that Hudi retains when performing a clean operation.");
     public static final ConfigOption<String> INDEX_TYPE =
             ConfigOptions.key("option.pipeline.hoodie.index.type")
                     .stringType()
@@ -93,12 +97,14 @@ public class HudiDataSinkOptions {
             ConfigOptions.key("option.pipeline.write.tasks")
                     .intType()
                     .defaultValue(1)
-                    .withDescription("Parallelism of tasks that do actual write, default is the parallelism of the execution environment");
+                    .withDescription(
+                            "Parallelism of tasks that do actual write, default is the parallelism of the execution environment");
     public static final ConfigOption<Integer> COMPACTION_TASKS_NUM =
             ConfigOptions.key("option.pipeline.hoodie.compaction.tasks")
                     .intType()
                     .defaultValue(1)
-                    .withDescription("Parallelism of tasks that do actual compaction, default same as the write task parallelism");
+                    .withDescription(
+                            "Parallelism of tasks that do actual compaction, default same as the write task parallelism");
     public static final ConfigOption<String> SERVER_TIME_ZONE =
             ConfigOptions.key("server.time.zone")
                     .stringType()
@@ -114,13 +120,15 @@ public class HudiDataSinkOptions {
             ConfigOptions.key("option.hadoop.dfs.client.use.datanode.hostname")
                     .stringType()
                     .defaultValue("true")
-                    .withDescription("HDFS clients attempt to establish connections using the IP addresses of data nodes. However, in some network environments, it may be desirable or necessary for clients to establish connections using the hostnames of data nodes.");
+                    .withDescription(
+                            "HDFS clients attempt to establish connections using the IP addresses of data nodes. However, in some network environments, it may be desirable or necessary for clients to establish connections using the hostnames of data nodes.");
 
     public static final ConfigOption<String> KERBEROS_PRINCIPAL_PATTERN =
             ConfigOptions.key("option.hadoop.dfs.namenode.kerberos.principal.pattern")
                     .stringType()
                     .defaultValue("true")
-                    .withDescription("Set the matching mode of the Kerberos principal of the NameNode service to allow authentication for all realms.");
+                    .withDescription(
+                            "Set the matching mode of the Kerberos principal of the NameNode service to allow authentication for all realms.");
 
     public static Map<String, String> getPropertiesByPrefix(
             Configuration tableOptions, String prefix) {

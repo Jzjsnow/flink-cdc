@@ -26,7 +26,9 @@ import io.debezium.relational.Table;
 import io.debezium.relational.history.TableChanges;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
 import javax.annotation.Nullable;
+
 import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -34,7 +36,6 @@ import java.util.List;
 import java.util.stream.Collectors;
 
 import static com.ververica.cdc.connectors.oracle.source.utils.OracleUtils.quote;
-
 
 /** Utilities for converting from debezium {@link Table} types to {@link Schema}. */
 public class OracleSchemaUtils {
@@ -104,21 +105,17 @@ public class OracleSchemaUtils {
         return tableIds;
     }
 
-    public static Schema getTableSchema(
-            TableId tableId,
-            OracleSourceConfig sourceConfig) {
-        try{
-        // fetch table schemas
-        JdbcConnection jdbc = DebeziumUtils.createOracleConnection(sourceConfig);
-            OracleSchema mySqlSchema =
-                    new OracleSchema();
+    public static Schema getTableSchema(TableId tableId, OracleSourceConfig sourceConfig) {
+        try {
+            // fetch table schemas
+            JdbcConnection jdbc = DebeziumUtils.createOracleConnection(sourceConfig);
+            OracleSchema mySqlSchema = new OracleSchema();
             TableChanges.TableChange tableSchema =
                     mySqlSchema.getTableSchema(jdbc, toDbzTableId(tableId));
             return toSchema(tableSchema.getTable());
         } catch (Exception e) {
             throw new RuntimeException("Error to get table schema: " + e.getMessage(), e);
         }
-
     }
 
     public static Schema toSchema(Table table) {

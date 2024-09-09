@@ -267,5 +267,6 @@ public class PostgresDataSourceOptions extends SourceOptions {
             ConfigOptions.key("default.heartbeat.ms")
                     .stringType()
                     .defaultValue("300000")
-                    .withDescription("Heartbeat messages are useful for monitoring whether the connector is receiving change events from the database. Heartbeat messages might help decrease the number of change events that need to be re-sent when a connector restarts. To send heartbeat messages, set this property to a positive integer, which indicates the number of milliseconds between heartbeat messages..");
+                    .withDescription(
+                            "Heartbeat messages are useful for monitoring whether the connector is receiving change events from the database. Heartbeat messages might help decrease the number of change events that need to be re-sent when a connector restarts. To send heartbeat messages, set this property to a positive integer, which indicates the number of milliseconds between heartbeat messages..");
 }

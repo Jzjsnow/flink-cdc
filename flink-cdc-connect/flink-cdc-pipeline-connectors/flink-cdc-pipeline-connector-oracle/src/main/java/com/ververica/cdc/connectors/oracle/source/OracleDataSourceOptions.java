@@ -250,20 +250,20 @@ public class OracleDataSourceOptions {
                     .defaultValue("false")
                     .withDescription(
                             "The case sensitivity of database and table names usually depends on the type of database and its configuration.");
+
     @Experimental
     public static final ConfigOption<String> DATABASE_CONNECTION_ADAPTER =
             ConfigOptions.key("database.connection.adapter")
                     .stringType()
                     .defaultValue("logminer")
-                    .withDescription(
-                            "Database connection adapter.");
+                    .withDescription("Database connection adapter.");
+
     @Experimental
     public static final ConfigOption<String> LOG_MINING_STRATEGY =
             ConfigOptions.key("log.mining.strategy")
                     .stringType()
                     .defaultValue("online_catalog")
-                    .withDescription(
-                            "A strategy in log data analysis or mining.");
+                    .withDescription("A strategy in log data analysis or mining.");
 
     @Experimental
     public static final ConfigOption<String> LOG_MINING_CONTINUOUS_MINE =
@@ -272,11 +272,4 @@ public class OracleDataSourceOptions {
                     .defaultValue("true")
                     .withDescription(
                             "A continuous or ongoing mining process in the field of log mining.");
-
-
-
-
-
-
-
 }

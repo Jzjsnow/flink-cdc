@@ -28,15 +28,9 @@ import com.ververica.cdc.common.data.RecordData;
 import com.ververica.cdc.common.data.StringData;
 import com.ververica.cdc.common.data.TimestampData;
 import com.ververica.cdc.common.data.ZonedTimestampData;
-import com.ververica.cdc.common.types.DataType;
-import com.ververica.cdc.common.types.DecimalType;
-import com.ververica.cdc.common.types.LocalZonedTimestampType;
-import com.ververica.cdc.common.types.TimestampType;
-import com.ververica.cdc.common.types.ZonedTimestampType;
 
 import java.nio.ByteOrder;
 
-import static com.ververica.cdc.common.types.DataTypeRoot.DECIMAL;
 import static com.ververica.cdc.common.utils.Preconditions.checkArgument;
 
 /**

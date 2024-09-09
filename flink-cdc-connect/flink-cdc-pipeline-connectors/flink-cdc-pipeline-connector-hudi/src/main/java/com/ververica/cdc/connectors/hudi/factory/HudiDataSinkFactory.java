@@ -26,7 +26,24 @@ import com.ververica.cdc.connectors.hudi.sink.HudiDataSink;
 import java.util.HashSet;
 import java.util.Set;
 
-import static com.ververica.cdc.connectors.hudi.sink.HudiDataSinkOptions.*;
+import static com.ververica.cdc.connectors.hudi.sink.HudiDataSinkOptions.CLEANER_COMMITS_RETAINED;
+import static com.ververica.cdc.connectors.hudi.sink.HudiDataSinkOptions.COMPACTION_TASKS_NUM;
+import static com.ververica.cdc.connectors.hudi.sink.HudiDataSinkOptions.DATASOURCE_WRITE_RECONCILE_SCHEMA;
+import static com.ververica.cdc.connectors.hudi.sink.HudiDataSinkOptions.HDFS_CACHE;
+import static com.ververica.cdc.connectors.hudi.sink.HudiDataSinkOptions.HIVE_SYNC_ENABLED;
+import static com.ververica.cdc.connectors.hudi.sink.HudiDataSinkOptions.INDEX_TYPE;
+import static com.ververica.cdc.connectors.hudi.sink.HudiDataSinkOptions.KERBEROS_PRINCIPAL_PATTERN;
+import static com.ververica.cdc.connectors.hudi.sink.HudiDataSinkOptions.PARTITIONFIELD;
+import static com.ververica.cdc.connectors.hudi.sink.HudiDataSinkOptions.PRIMARYKEY;
+import static com.ververica.cdc.connectors.hudi.sink.HudiDataSinkOptions.READ_AS_STREAMING;
+import static com.ververica.cdc.connectors.hudi.sink.HudiDataSinkOptions.READ_STREAMING_CHECK_INTERVAL;
+import static com.ververica.cdc.connectors.hudi.sink.HudiDataSinkOptions.SCHEMA_ON_READ_ENABLE;
+import static com.ververica.cdc.connectors.hudi.sink.HudiDataSinkOptions.SERVER_TIME_ZONE;
+import static com.ververica.cdc.connectors.hudi.sink.HudiDataSinkOptions.TABLENAME;
+import static com.ververica.cdc.connectors.hudi.sink.HudiDataSinkOptions.TABLEPATH;
+import static com.ververica.cdc.connectors.hudi.sink.HudiDataSinkOptions.USE_DATANODE_HOSTNAME;
+import static com.ververica.cdc.connectors.hudi.sink.HudiDataSinkOptions.WRITE_OPERATION_MODE;
+import static com.ververica.cdc.connectors.hudi.sink.HudiDataSinkOptions.WRITE_TASKS_NUM;
 
 /** A dummy {@link DataSinkFactory} to create {@link HudiDataSink}. */
 @Internal

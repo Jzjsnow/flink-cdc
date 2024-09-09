@@ -16,6 +16,8 @@
 
 package com.ververica.cdc.connectors.mysql.source;
 
+import org.apache.flink.table.catalog.ObjectPath;
+
 import com.ververica.cdc.common.configuration.Configuration;
 import com.ververica.cdc.common.factories.Factory;
 import com.ververica.cdc.connectors.mysql.factory.MySqlDataSourceFactory;
@@ -36,8 +38,6 @@ import static com.ververica.cdc.connectors.mysql.testutils.MySqSourceTestUtils.T
 import static com.ververica.cdc.connectors.mysql.testutils.MySqSourceTestUtils.TEST_USER;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
-
-import org.apache.flink.table.catalog.ObjectPath;
 
 /** Unit tests for {@link MySqlDataSourceFactory}. */
 public class MySqlDataSourceFactoryTest extends MySqlSourceTestBase {

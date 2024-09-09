@@ -21,10 +21,8 @@ import com.ververica.cdc.common.event.TableId;
 import com.ververica.cdc.common.schema.Schema;
 import com.ververica.cdc.common.source.MetadataAccessor;
 import com.ververica.cdc.connectors.oracle.source.config.OracleSourceConfig;
-import com.ververica.cdc.connectors.oracle.utils.DebeziumUtils;
 import com.ververica.cdc.connectors.oracle.utils.OracleSchemaUtils;
 import io.debezium.connector.oracle.OraclePartition;
-import io.debezium.jdbc.JdbcConnection;
 
 import javax.annotation.Nullable;
 
@@ -82,7 +80,7 @@ public class OracleMetadataAccessor implements MetadataAccessor {
      */
     @Override
     public Schema getTableSchema(TableId tableId) {
-        Schema schema = OracleSchemaUtils.getTableSchema(tableId,sourceConfig);
+        Schema schema = OracleSchemaUtils.getTableSchema(tableId, sourceConfig);
         return schema;
     }
 }

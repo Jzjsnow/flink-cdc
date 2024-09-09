@@ -16,7 +16,6 @@
 
 package com.ververica.cdc.connectors.hudi.sink;
 
-import com.ververica.cdc.connectors.hudi.utils.HudiSInkUtils;
 import org.apache.flink.api.common.functions.FlatMapFunction;
 import org.apache.flink.streaming.api.datastream.DataStream;
 import org.apache.flink.table.api.DataTypes;
@@ -28,6 +27,7 @@ import com.ververica.cdc.common.configuration.Configuration;
 import com.ververica.cdc.common.event.Event;
 import com.ververica.cdc.common.sink.CustomSink;
 import com.ververica.cdc.common.sink.DataSink;
+import com.ververica.cdc.connectors.hudi.utils.HudiSInkUtils;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.org.apache.avro.LogicalTypes;
@@ -38,14 +38,13 @@ import java.time.ZoneId;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
-import java.util.Map;
 
 import static com.ververica.cdc.connectors.hudi.utils.HudiSInkUtils.getHoodieTableMetaClient;
 
 /** A {@link DataSink} for "hudi" connector. */
 public class HudiSink implements CustomSink<Event>, Serializable {
     Configuration config;
-    private final String COMM=",";
+    private static final String COMM = ",";
 
     public HudiSink(Configuration config) {
         this.config = config;
@@ -59,27 +58,46 @@ public class HudiSink implements CustomSink<Event>, Serializable {
                 hoodieTableMetaClient.getTableConfig().getTableCreateSchema().get();
         String tableType = hoodieTableMetaClient.getTableConfig().getTableType().name();
         List<org.apache.hudi.org.apache.avro.Schema.Field> fields = schema.getFields();
-        String prefix="option.pipeline.";
+        String prefix = "option.pipeline.";
         HashMap<String, String> map = new HashMap<>();
-        HudiSInkUtils.getConfigMap(map,prefix,config);
+        HudiSInkUtils.getConfigMap(map, prefix, config);
         HoodiePipeline.Builder builderMor =
                 HoodiePipeline.builder(config.getOptional(HudiDataSinkOptions.TABLENAME).get())
-                        .pk(config.getOptional(HudiDataSinkOptions.PRIMARYKEY).get()).option(FlinkOptions.TABLE_TYPE.key(), tableType)
+                        .pk(config.getOptional(HudiDataSinkOptions.PRIMARYKEY).get())
+                        .option(FlinkOptions.TABLE_TYPE.key(), tableType)
                         .option(
                                 FlinkOptions.PATH.key(),
                                 config.getOptional(HudiDataSinkOptions.TABLEPATH).get())
-                        .option(FlinkOptions.COMPACTION_TASKS.key(), config.get(HudiDataSinkOptions.COMPACTION_TASKS_NUM))
-                        .option(FlinkOptions.WRITE_TASKS.key(), config.get(HudiDataSinkOptions.WRITE_TASKS_NUM))
+                        .option(
+                                FlinkOptions.COMPACTION_TASKS.key(),
+                                config.get(HudiDataSinkOptions.COMPACTION_TASKS_NUM))
+                        .option(
+                                FlinkOptions.WRITE_TASKS.key(),
+                                config.get(HudiDataSinkOptions.WRITE_TASKS_NUM))
                         .option("hoodie.index.type", config.get(HudiDataSinkOptions.INDEX_TYPE))
-                        .option("hoodie.cleaner.commits.retained", config.get(HudiDataSinkOptions.CLEANER_COMMITS_RETAINED))
-                        .option("hoodie.schema.on.read.enable", config.get(HudiDataSinkOptions.SCHEMA_ON_READ_ENABLE))
-                        .option("hoodie.datasource.write.reconcile.schema", config.get(HudiDataSinkOptions.DATASOURCE_WRITE_RECONCILE_SCHEMA))
-                        .option(FlinkOptions.HIVE_SYNC_ENABLED.key(), config.get(HudiDataSinkOptions.HIVE_SYNC_ENABLED))
-                        .option(FlinkOptions.READ_AS_STREAMING.key(), config.get(HudiDataSinkOptions.READ_AS_STREAMING))
-                        .option(FlinkOptions.READ_STREAMING_CHECK_INTERVAL.key(), config.get(HudiDataSinkOptions.READ_STREAMING_CHECK_INTERVAL))
-                        .option(FlinkOptions.OPERATION, config.get(HudiDataSinkOptions.WRITE_OPERATION_MODE));
-        for(Object key:map.keySet()){
-            builderMor.option(key.toString(),map.get(key));
+                        .option(
+                                "hoodie.cleaner.commits.retained",
+                                config.get(HudiDataSinkOptions.CLEANER_COMMITS_RETAINED))
+                        .option(
+                                "hoodie.schema.on.read.enable",
+                                config.get(HudiDataSinkOptions.SCHEMA_ON_READ_ENABLE))
+                        .option(
+                                "hoodie.datasource.write.reconcile.schema",
+                                config.get(HudiDataSinkOptions.DATASOURCE_WRITE_RECONCILE_SCHEMA))
+                        .option(
+                                FlinkOptions.HIVE_SYNC_ENABLED.key(),
+                                config.get(HudiDataSinkOptions.HIVE_SYNC_ENABLED))
+                        .option(
+                                FlinkOptions.READ_AS_STREAMING.key(),
+                                config.get(HudiDataSinkOptions.READ_AS_STREAMING))
+                        .option(
+                                FlinkOptions.READ_STREAMING_CHECK_INTERVAL.key(),
+                                config.get(HudiDataSinkOptions.READ_STREAMING_CHECK_INTERVAL))
+                        .option(
+                                FlinkOptions.OPERATION,
+                                config.get(HudiDataSinkOptions.WRITE_OPERATION_MODE));
+        for (Object key : map.keySet()) {
+            builderMor.option(key.toString(), map.get(key));
         }
         for (org.apache.hudi.org.apache.avro.Schema.Field field : fields) {
             builderMor.column(AvroTypeUtil.toLogicalType(field));
@@ -88,7 +106,9 @@ public class HudiSink implements CustomSink<Event>, Serializable {
             builderMor.partition(
                     config.getOptional(HudiDataSinkOptions.PARTITIONFIELD).get().split(COMM));
         }
-        HudiEventSerializer serializer = new HudiEventSerializer(ZoneId.of(config.get(HudiDataSinkOptions.SERVER_TIME_ZONE)));
+        HudiEventSerializer serializer =
+                new HudiEventSerializer(
+                        ZoneId.of(config.get(HudiDataSinkOptions.SERVER_TIME_ZONE)));
         DataStream<RowData> dStremMor =
                 dataStream.flatMap(
                         new FlatMapFunction<Event, RowData>() {
@@ -101,7 +121,6 @@ public class HudiSink implements CustomSink<Event>, Serializable {
         dStremMor = dStremMor.filter(e -> e != null);
         builderMor.sink(dStremMor, false);
     }
-
 
     // Auxiliary class for converting Avro Schema to Flink LogicalType
     private static class AvroTypeUtil {
