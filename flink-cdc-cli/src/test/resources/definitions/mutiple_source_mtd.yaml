@@ -1,0 +1,27 @@
+source:
+  type: mysql
+  host_list: 192.168.30.102:50001,192.168.30.103:50002
+  port: 50001
+  username: datawings
+  password: 111
+  tables: test.linjianchang0124
+  server-id: 5400-5404
+  server-time-zone: Asia/Shanghai
+
+    
+route:
+  - source-table: aaa.bbb
+    sink-table: ccc.ddd
+    description: sync table to one destination table
+  
+sink:
+  type: doris
+  fenodes: 192.168.30.105:9033
+  username: root
+  password: 1111
+  table.create.properties.light_schema_change: false
+  table.create.properties.replication_num: 1
+
+pipeline:
+  name: Sync MySQL Database to doris
+  parallelism: 1 

@@ -16,7 +16,10 @@
 
 package com.ververica.cdc.connectors.hudi.sink;
 
+import com.ververica.cdc.runtime.operators.sink.CustomRegistryAndReSendCreateTable;
 import org.apache.flink.api.common.functions.FlatMapFunction;
+import org.apache.flink.api.common.typeinfo.TypeInformation;
+import org.apache.flink.runtime.jobgraph.OperatorID;
 import org.apache.flink.streaming.api.datastream.DataStream;
 import org.apache.flink.table.api.DataTypes;
 import org.apache.flink.table.data.RowData;
@@ -51,7 +54,7 @@ public class HudiSink implements CustomSink<Event>, Serializable {
     }
 
     @Override
-    public void sinkTo(DataStream<Event> dataStream) {
+    public void sinkTo(DataStream<Event> dataStream, OperatorID schemaOperatorId) {
 
         HoodieTableMetaClient hoodieTableMetaClient = getHoodieTableMetaClient(config);
         org.apache.hudi.org.apache.avro.Schema schema =
@@ -110,7 +113,13 @@ public class HudiSink implements CustomSink<Event>, Serializable {
                 new HudiEventSerializer(
                         ZoneId.of(config.get(HudiDataSinkOptions.SERVER_TIME_ZONE)));
         DataStream<RowData> dStremMor =
-                dataStream.flatMap(
+                dataStream
+                        .transform(
+                                "customRegistrerAndReCreate",
+                                TypeInformation.of(Event.class),
+                                new CustomRegistryAndReSendCreateTable(schemaOperatorId)
+                        )
+                        .flatMap(
                         new FlatMapFunction<Event, RowData>() {
                             @Override
                             public void flatMap(Event value, Collector<RowData> out)

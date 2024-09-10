@@ -126,7 +126,7 @@ public class HudiDataSinkOptions {
     public static final ConfigOption<String> KERBEROS_PRINCIPAL_PATTERN =
             ConfigOptions.key("option.hadoop.dfs.namenode.kerberos.principal.pattern")
                     .stringType()
-                    .defaultValue("true")
+                    .defaultValue("*")
                     .withDescription(
                             "Set the matching mode of the Kerberos principal of the NameNode service to allow authentication for all realms.");
 
