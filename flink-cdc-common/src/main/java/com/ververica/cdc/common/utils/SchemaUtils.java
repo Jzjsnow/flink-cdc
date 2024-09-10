@@ -81,7 +81,8 @@ public class SchemaUtils {
             return applyDropColumnEvent((DropColumnEvent) event, schema, sinkDataTypeRoots);
         } else if (event instanceof RenameColumnEvent) {
             return applyRenameColumnEvent((RenameColumnEvent) event, schema);
-            // Renaming columns will not change the data type, so sinkDataTypeRoots does not need to be passed in.
+            // Renaming columns will not change the data type, so sinkDataTypeRoots does not need to
+            // be passed in.
         } else if (event instanceof AlterColumnTypeEvent) {
             return applyAlterColumnTypeEvent(
                     (AlterColumnTypeEvent) event, schema, sinkDataTypeRoots);
