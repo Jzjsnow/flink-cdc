@@ -20,6 +20,7 @@ import org.apache.flink.annotation.PublicEvolving;
 import org.apache.flink.api.connector.sink2.SinkWriter;
 import org.apache.flink.api.connector.sink2.StatefulSink;
 import org.apache.flink.api.connector.sink2.TwoPhaseCommittingSink;
+import org.apache.flink.runtime.jobgraph.OperatorID;
 import org.apache.flink.streaming.api.datastream.DataStream;
 
 import java.io.Serializable;
@@ -45,5 +46,5 @@ public interface CustomSink<Event> extends Serializable {
      * @param dataStream the runtime context.
      * @return
      */
-    void sinkTo(DataStream<Event> dataStream);
+    void sinkTo(DataStream<Event> dataStream, OperatorID schemaOperatorId);
 }
