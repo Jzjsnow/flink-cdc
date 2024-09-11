@@ -30,6 +30,55 @@ under the License.
             <destName>flink-cdc-dist-${revision}.jar</destName>
             <fileMode>0644</fileMode>
         </file>
+
+        <file>
+            <source>${project.basedir}/../flink-cdc-connect/flink-cdc-pipeline-connectors/flink-cdc-pipeline-connector-doris/target/flink-cdc-pipeline-connector-doris-${revision}.jar</source>
+            <outputDirectory>lib</outputDirectory>
+            <destName>flink-cdc-pipeline-connector-doris-${revision}.jar</destName>
+            <fileMode>0644</fileMode>
+        </file>
+
+        <file>
+            <source>${project.basedir}/../flink-cdc-connect/flink-cdc-pipeline-connectors/flink-cdc-pipeline-connector-hudi/target/flink-cdc-pipeline-connector-hudi-${revision}.jar</source>
+            <outputDirectory>lib</outputDirectory>
+            <destName>flink-cdc-pipeline-connector-hudi-${revision}.jar</destName>
+            <fileMode>0644</fileMode>
+        </file>
+
+        <file>
+            <source>${project.basedir}/../flink-cdc-connect/flink-cdc-pipeline-connectors/flink-cdc-pipeline-connector-iceberg/target/flink-cdc-pipeline-connector-iceberg-${revision}.jar</source>
+            <outputDirectory>lib</outputDirectory>
+            <destName>flink-cdc-pipeline-connector-iceberg-${revision}.jar</destName>
+            <fileMode>0644</fileMode>
+        </file>
+
+        <file>
+            <source>${project.basedir}/../flink-cdc-connect/flink-cdc-pipeline-connectors/flink-cdc-pipeline-connector-mysql/target/flink-cdc-pipeline-connector-mysql-${revision}.jar</source>
+            <outputDirectory>lib</outputDirectory>
+            <destName>flink-cdc-pipeline-connector-mysql-${revision}.jar</destName>
+            <fileMode>0644</fileMode>
+        </file>
+
+        <file>
+            <source>${project.basedir}/../flink-cdc-connect/flink-cdc-pipeline-connectors/flink-cdc-pipeline-connector-oracle/target/flink-cdc-pipeline-connector-oracle-${revision}.jar</source>
+            <outputDirectory>lib</outputDirectory>
+            <destName>flink-cdc-pipeline-connector-oracle-${revision}.jar</destName>
+            <fileMode>0644</fileMode>
+        </file>
+
+        <file>
+            <source>${project.basedir}/../flink-cdc-connect/flink-cdc-pipeline-connectors/flink-cdc-pipeline-connector-postgres/target/flink-cdc-pipeline-connector-postgres-${revision}.jar</source>
+            <outputDirectory>lib</outputDirectory>
+            <destName>flink-cdc-pipeline-connector-postgres-${revision}.jar</destName>
+            <fileMode>0644</fileMode>
+        </file>
+
+        <file>
+            <source>${project.basedir}/../flink-cdc-connect/flink-cdc-pipeline-connectors/flink-cdc-pipeline-connector-values/target/flink-cdc-pipeline-connector-values-${revision}.jar</source>
+            <outputDirectory>lib</outputDirectory>
+            <destName>flink-cdc-pipeline-connector-values-${revision}.jar</destName>
+            <fileMode>0644</fileMode>
+        </file>
     </files>
 
     <fileSets>
