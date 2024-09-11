@@ -49,11 +49,18 @@ pipeline {
                         git_commit_name = sh (script: "git --no-pager show -s --format='%an' ${gitCommitId}",returnStdout: true).trim()
                         println "git_commit_name=" + git_commit_name        
                         stringname=BRANCH_NAME
-                        getassemblyversion=sh(script:"echo ${stringname}|cut -d '-' -f 1,2",returnStdout: true).trim()
+                        def fileContent = sh (script: "grep revision pom.xml|grep -v version", returnStdout: true).trim()
+                        println "fileContent=" + fileContent
+                        // 使用正则表达式替换 <revision> 标签并捕获其内容  
+                        def processedContent = fileContent.replaceAll(
+                            '<revision>(.*?)</revision>', 
+                            { match -> match[1] }         
+                        ).trim()
                         println "getassemblyversion=" + getassemblyversion
-                        getassemblyversion="flink-cdc-"+getassemblyversion
+                        pomversion = processedContent
+                        getassemblyversion="flink-cdc-"+pomversion
                         println "getassemblyversion=" + getassemblyversion
-                        pomversion = sh (script: "grep revision pom.xml|grep -v version|tr -d 'revision<>/' |tr -d '[:space]'", returnStdout: true).trim()
+                        println "processedContext=" + processedContent
                         println "pom.version=" + pomversion
                         version = sh(script:"echo ${pomversion}|cut -d '-' -f 1",returnStdout: true).trim()
                         println "version=" + version
