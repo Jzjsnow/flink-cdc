@@ -175,7 +175,8 @@ class CliFrontendTest {
                     + "                                   was triggered.\n"
                     + "    -s,--from-savepoint <arg>      Path to a savepoint to restore the job from\n"
                     + "                                   (for example hdfs:///flink/savepoint-1537\n"
-                    + "       --use-mini-cluster          Use Flink MiniCluster to run the pipeline\n";
+                    + "       --use-mini-cluster          Use Flink MiniCluster to run the pipeline\n"
+                    + "       --yarn-application          Use YARN Application Mode to run the pipeline\n";
 
     private static class NoOpComposer implements PipelineComposer {
 
