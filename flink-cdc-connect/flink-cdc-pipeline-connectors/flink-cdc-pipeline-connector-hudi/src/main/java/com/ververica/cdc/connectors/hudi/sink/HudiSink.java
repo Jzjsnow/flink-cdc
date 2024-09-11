@@ -16,7 +16,6 @@
 
 package com.ververica.cdc.connectors.hudi.sink;
 
-import com.ververica.cdc.runtime.operators.sink.CustomRegistryAndReSendCreateTable;
 import org.apache.flink.api.common.functions.FlatMapFunction;
 import org.apache.flink.api.common.typeinfo.TypeInformation;
 import org.apache.flink.runtime.jobgraph.OperatorID;
@@ -31,6 +30,7 @@ import com.ververica.cdc.common.event.Event;
 import com.ververica.cdc.common.sink.CustomSink;
 import com.ververica.cdc.common.sink.DataSink;
 import com.ververica.cdc.connectors.hudi.utils.HudiSInkUtils;
+import com.ververica.cdc.runtime.operators.sink.CustomRegistryAndReSendCreateTable;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.org.apache.avro.LogicalTypes;
@@ -117,16 +117,15 @@ public class HudiSink implements CustomSink<Event>, Serializable {
                         .transform(
                                 "customRegistrerAndReCreate",
                                 TypeInformation.of(Event.class),
-                                new CustomRegistryAndReSendCreateTable(schemaOperatorId)
-                        )
+                                new CustomRegistryAndReSendCreateTable(schemaOperatorId))
                         .flatMap(
-                        new FlatMapFunction<Event, RowData>() {
-                            @Override
-                            public void flatMap(Event value, Collector<RowData> out)
-                                    throws Exception {
-                                serializer.serialize(value, out);
-                            }
-                        });
+                                new FlatMapFunction<Event, RowData>() {
+                                    @Override
+                                    public void flatMap(Event value, Collector<RowData> out)
+                                            throws Exception {
+                                        serializer.serialize(value, out);
+                                    }
+                                });
         dStremMor = dStremMor.filter(e -> e != null);
         builderMor.sink(dStremMor, false);
     }

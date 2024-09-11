@@ -67,7 +67,7 @@ public class IcebergMetadataApplier implements MetadataApplier {
             HiveCatalog catalog;
             final CatalogLoader catalogLoader =
                     IcebergUtils.catalogLoader(
-                            config.getOptional(IcebergDataSinkOptions.HIVECATALOG).get(), config);
+                            config.getOptional(IcebergDataSinkOptions.CATALOG_NAME).get(), config);
             catalog = (HiveCatalog) catalogLoader.loadCatalog();
             Table table =
                     catalog.loadTable(

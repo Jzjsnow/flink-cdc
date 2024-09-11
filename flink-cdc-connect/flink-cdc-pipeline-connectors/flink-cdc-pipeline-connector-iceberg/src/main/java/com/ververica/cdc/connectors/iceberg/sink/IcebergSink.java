@@ -16,7 +16,6 @@
 
 package com.ververica.cdc.connectors.iceberg.sink;
 
-import com.ververica.cdc.runtime.operators.sink.CustomRegistryAndReSendCreateTable;
 import org.apache.flink.api.common.functions.FlatMapFunction;
 import org.apache.flink.api.common.typeinfo.TypeInformation;
 import org.apache.flink.runtime.jobgraph.OperatorID;
@@ -29,6 +28,7 @@ import com.ververica.cdc.common.event.Event;
 import com.ververica.cdc.common.sink.CustomSink;
 import com.ververica.cdc.common.sink.DataSink;
 import com.ververica.cdc.connectors.iceberg.utils.IcebergUtils;
+import com.ververica.cdc.runtime.operators.sink.CustomRegistryAndReSendCreateTable;
 import org.apache.iceberg.Table;
 import org.apache.iceberg.catalog.Namespace;
 import org.apache.iceberg.catalog.TableIdentifier;
@@ -79,12 +79,10 @@ public class IcebergSink implements CustomSink<Event>, Serializable {
         }
     }
 
-    private void hiveCatalogWrite(
-            DataStream<Event> dataStream,
-            OperatorID schemaOperatorId) {
+    private void hiveCatalogWrite(DataStream<Event> dataStream, OperatorID schemaOperatorId) {
         String database = config.getOptional(IcebergDataSinkOptions.DATABASE).get();
         String tableName = config.getOptional(IcebergDataSinkOptions.TABLENAME).get();
-        String catalog = config.get(IcebergDataSinkOptions.HIVECATALOG);
+        String catalog = config.get(IcebergDataSinkOptions.CATALOG_NAME);
         TableIdentifier identifier = TableIdentifier.of(Namespace.of(database), tableName);
         final CatalogLoader catalogLoader = IcebergUtils.catalogLoader(catalog, config);
         Table table = catalogLoader.loadCatalog().loadTable(identifier);
@@ -107,8 +105,7 @@ public class IcebergSink implements CustomSink<Event>, Serializable {
     }
 
     private DataStream<RowData> serializerDataStream(
-            DataStream<Event> dataStream, Table table,
-            OperatorID schemaOperatorId) {
+            DataStream<Event> dataStream, Table table, OperatorID schemaOperatorId) {
         IcebergEventSerializer serializer =
                 new IcebergEventSerializer(
                         zoneId, FlinkSchemaUtil.toSchema(table.schema()).getTableColumns());
@@ -119,19 +116,17 @@ public class IcebergSink implements CustomSink<Event>, Serializable {
                                 TypeInformation.of(Event.class),
                                 new CustomRegistryAndReSendCreateTable(schemaOperatorId))
                         .flatMap(
-                        new FlatMapFunction<Event, RowData>() {
-                            @Override
-                            public void flatMap(Event value, Collector<RowData> out)
-                                    throws Exception {
-                                serializer.serialize(value, out);
-                            }
-                        });
+                                new FlatMapFunction<Event, RowData>() {
+                                    @Override
+                                    public void flatMap(Event value, Collector<RowData> out)
+                                            throws Exception {
+                                        serializer.serialize(value, out);
+                                    }
+                                });
         return dStremMor;
     }
 
-    public void hadoopCatalogWrite(
-            DataStream<Event> dataStream,
-            OperatorID schemaOperatorId) {
+    public void hadoopCatalogWrite(DataStream<Event> dataStream, OperatorID schemaOperatorId) {
         org.apache.hadoop.conf.Configuration conf = IcebergUtils.hadoopConfiguration(config);
         String warehouse = config.get(IcebergDataSinkOptions.WAREHOUSE);
         HadoopCatalog hadoopCatalog = new HadoopCatalog(conf, warehouse);

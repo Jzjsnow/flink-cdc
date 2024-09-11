@@ -27,6 +27,8 @@ import org.slf4j.LoggerFactory;
 import java.util.HashMap;
 import java.util.Map;
 
+import static com.ververica.cdc.connectors.iceberg.sink.IcebergDataSinkOptions.getPropertiesByPrefix;
+
 /** Supports {@link IcebergUtils} to hive catalog. */
 public class IcebergUtils {
     private static final Logger LOG = LoggerFactory.getLogger(IcebergUtils.class);
@@ -37,9 +39,8 @@ public class IcebergUtils {
         configuration.set("fs.defaultFS", config.get(IcebergDataSinkOptions.FSDEFAULTFS));
         configuration.setBoolean(
                 "fs.hdfs.impl.disable.cache", config.get(IcebergDataSinkOptions.HDFS_CACHE));
-        String prefix = "option.catalog.hdfs.";
-        HashMap<String, String> map = new HashMap<>();
-        getConfigMap(map, prefix, config);
+        String prefix = "catalog.hdfs.";
+        Map<String, String> map = getPropertiesByPrefix(config, prefix);
         for (Object key : map.keySet()) {
             configuration.set(key.toString(), map.get(key));
         }
@@ -48,7 +49,7 @@ public class IcebergUtils {
 
     public static CatalogLoader catalogLoader(String catalog, Configuration config) {
         String catalogType = config.get(IcebergDataSinkOptions.CATALOG_TYPE);
-        HashMap<String, String> map = new HashMap<>();
+        Map<String, String> map = new HashMap<>();
         map.put("type", "iceberg");
         switch (catalogType) {
             case FlinkCatalogFactory.ICEBERG_CATALOG_TYPE_HIVE:
@@ -62,8 +63,8 @@ public class IcebergUtils {
                 map.put(
                         CatalogProperties.CLIENT_POOL_SIZE,
                         config.get(IcebergDataSinkOptions.CLIENT_POOL_SIZE));
-                String prefix = "option.catalog.hive.";
-                getConfigMap(map, prefix, config);
+                String prefix = "catalog.hive.";
+                map = getPropertiesByPrefix(config, prefix);
                 return CatalogLoader.hive(catalog, hadoopConfiguration(config), map);
             case FlinkCatalogFactory.ICEBERG_CATALOG_TYPE_HADOOP:
                 LOG.debug("Hadoop catalog dont not need init catalogloader!");
@@ -71,21 +72,6 @@ public class IcebergUtils {
             default:
                 LOG.debug("this type catalog dont not need init catalogloader!");
                 return null;
-        }
-    }
-
-    private static void getConfigMap(
-            HashMap<String, String> map, String prefix, Configuration config) {
-        Map configMap = config.toMap();
-        for (Object key : configMap.keySet()) {
-            String catalogKey = key.toString();
-            if (key.toString().startsWith(prefix)) {
-                int index = catalogKey.indexOf(prefix);
-                if (index != -1) {
-                    catalogKey = catalogKey.substring(index + prefix.length());
-                }
-                map.put(catalogKey, configMap.get(key).toString());
-            }
         }
     }
 }

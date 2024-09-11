@@ -28,12 +28,12 @@ import java.time.ZoneId;
 import java.util.HashSet;
 import java.util.Set;
 
+import static com.ververica.cdc.connectors.iceberg.sink.IcebergDataSinkOptions.CATALOG_NAME;
 import static com.ververica.cdc.connectors.iceberg.sink.IcebergDataSinkOptions.CATALOG_TYPE;
 import static com.ververica.cdc.connectors.iceberg.sink.IcebergDataSinkOptions.CLIENT_POOL_SIZE;
 import static com.ververica.cdc.connectors.iceberg.sink.IcebergDataSinkOptions.DATABASE;
 import static com.ververica.cdc.connectors.iceberg.sink.IcebergDataSinkOptions.FSDEFAULTFS;
 import static com.ververica.cdc.connectors.iceberg.sink.IcebergDataSinkOptions.HDFS_CACHE;
-import static com.ververica.cdc.connectors.iceberg.sink.IcebergDataSinkOptions.HIVECATALOG;
 import static com.ververica.cdc.connectors.iceberg.sink.IcebergDataSinkOptions.HIVEURI;
 import static com.ververica.cdc.connectors.iceberg.sink.IcebergDataSinkOptions.OVERWRITE_MODE;
 import static com.ververica.cdc.connectors.iceberg.sink.IcebergDataSinkOptions.SINK_PARALLELISM;
@@ -74,7 +74,7 @@ public class IcebergDataSinkFactory implements DataSinkFactory {
         Set<ConfigOption<?>> options = new HashSet<>();
         options.add(CATALOG_TYPE);
         options.add(SINK_PARALLELISM);
-        options.add(HIVECATALOG);
+        options.add(CATALOG_NAME);
         options.add(CLIENT_POOL_SIZE);
         options.add(HDFS_CACHE);
         options.add(OVERWRITE_MODE);

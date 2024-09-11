@@ -41,16 +41,16 @@ public class IcebergDataSinkOptions {
                     .booleanType()
                     .defaultValue(false)
                     .withDescription("If open the data write upsert mode");
-	public static final ConfigOption<Boolean> OVERWRITE_MODE =
+    public static final ConfigOption<Boolean> OVERWRITE_MODE =
             ConfigOptions.key("overwrite.mode")
                     .booleanType()
                     .defaultValue(false)
                     .withDescription("sink overwrite mode.");
-    public static final ConfigOption<String> HIVECATALOG =
-            ConfigOptions.key("hive.catalog")
+    public static final ConfigOption<String> CATALOG_NAME =
+            ConfigOptions.key("catalog.name")
                     .stringType()
-                    .defaultValue("hive_catalog")
-                    .withDescription("The catalog name of hive catalog.");
+                    .defaultValue("default_catalog")
+                    .withDescription("The catalog name of catalog.");
     public static final ConfigOption<String> DATABASE =
             ConfigOptions.key("database")
                     .stringType()
@@ -62,30 +62,30 @@ public class IcebergDataSinkOptions {
                     .noDefaultValue()
                     .withDescription("The name of the table to be written.");
     public static final ConfigOption<String> WAREHOUSE =
-            ConfigOptions.key("option.catalog.hive.warehouse")
+            ConfigOptions.key("catalog.hive.warehouse")
                     .stringType()
                     .noDefaultValue()
                     .withDescription(
                             "The Hive warehouse location, users should specify this path if neither set the hive-conf-dir to specify a location containing a hive-site.xml configuration file nor add a correct hive-site.xml to classpath.");
     public static final ConfigOption<String> HIVEURI =
-            ConfigOptions.key("option.catalog.hive.hive.uri")
+            ConfigOptions.key("catalog.hive.uri")
                     .stringType()
                     .noDefaultValue()
                     .withDescription("The Hive metastore's thrift URI.");
 
     public static final ConfigOption<String> FSDEFAULTFS =
-            ConfigOptions.key("option.catalog.hdfs.fs.defaultfs")
+            ConfigOptions.key("catalog.hdfs.fs.defaultFs")
                     .stringType()
                     .noDefaultValue()
                     .withDescription("The name of the default file system .");
     public static final ConfigOption<Boolean> HDFS_CACHE =
-            ConfigOptions.key("option.catalog.hdfs.fs.hdfs.impl.disable.cache")
+            ConfigOptions.key("catalog.hdfs.fs.hdfs.impl.disable.cache")
                     .booleanType()
                     .defaultValue(true)
                     .withDescription("if open hdfs cache.");
 
     public static final ConfigOption<String> CLIENT_POOL_SIZE =
-            ConfigOptions.key("option.catalog.hive.client.pool.size")
+            ConfigOptions.key("catalog.hive.clients")
                     .stringType()
                     .defaultValue("5")
                     .withDescription("The Hive metastore client pool size, default value is 2. ");
@@ -93,7 +93,6 @@ public class IcebergDataSinkOptions {
     public static Map<String, String> getPropertiesByPrefix(
             Configuration tableOptions, String prefix) {
         final Map<String, String> props = new HashMap<>();
-
         for (Map.Entry<String, String> entry : tableOptions.toMap().entrySet()) {
             if (entry.getKey().startsWith(prefix)) {
                 String subKey = entry.getKey().substring(prefix.length());
