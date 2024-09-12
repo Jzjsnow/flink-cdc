@@ -55,19 +55,22 @@ public class OracleDataSource implements DataSource {
         Properties properties = new Properties();
         properties.put(
                 "database.tablename.case.insensitive",
-                config.get(OracleDataSourceOptions.DATABASE_TABLE_CASE_INSENSITIVE)); // 11g数据库适配
+                config.get(OracleDataSourceOptions.DATABASE_TABLE_CASE_INSENSITIVE));
         properties.setProperty(
                 "database.connection.adapter",
                 config.get(
-                        OracleDataSourceOptions.DATABASE_CONNECTION_ADAPTER)); // 要同步快，这个配置必须加，不然非常慢
+                        OracleDataSourceOptions.DATABASE_CONNECTION_ADAPTER));
         properties.setProperty(
                 "log.mining.strategy", config.get(OracleDataSourceOptions.LOG_MINING_STRATEGY));
         properties.setProperty(
                 "log.mining.continuous.mine",
                 config.get(OracleDataSourceOptions.LOG_MINING_CONTINUOUS_MINE));
+        OracleSourceReader.Builder<Event> builder = OracleSourceReader.<Event>builder();
+        if (config.getOptional(OracleDataSourceOptions.JDBC_URL).isPresent()) {
+            builder = builder.url(config.getOptional(OracleDataSourceOptions.JDBC_URL).get());
+        }
         DebeziumSourceFunction<Event> sourceFunction =
-                OracleSourceReader.<Event>builder()
-                        .hostname(config.getOptional(OracleDataSourceOptions.HOSTNAME).get())
+                builder.hostname(config.getOptional(OracleDataSourceOptions.HOSTNAME).get())
                         .port(config.getOptional(OracleDataSourceOptions.PORT).get())
                         .database(
                                 config.getOptional(OracleDataSourceOptions.DATABASE)

@@ -62,8 +62,10 @@ public class PostgresEventDeserializer extends DebeziumEventDeserializationSchem
     private transient CustomPgSqlAntlrDdlParser customParser;
 
     public PostgresEventDeserializer(
-            DebeziumChangelogMode changelogMode, boolean includeSchemaChanges) {
-        super(new PostgresSchemaDataTypeInference(), changelogMode);
+            DebeziumChangelogMode changelogMode,
+            boolean includeSchemaChanges,
+            String sourceTimeZone) {
+        super(new PostgresSchemaDataTypeInference(), changelogMode, sourceTimeZone);
         this.includeSchemaChanges = includeSchemaChanges;
     }
 

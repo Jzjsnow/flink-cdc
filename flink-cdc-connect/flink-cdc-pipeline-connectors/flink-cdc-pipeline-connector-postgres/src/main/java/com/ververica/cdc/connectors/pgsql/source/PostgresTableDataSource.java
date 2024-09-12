@@ -141,7 +141,8 @@ public class PostgresTableDataSource implements DataSource, SupportsReadingMetad
                     "The Postgres CDC connector does not support 'latest-offset' startup mode when 'scan.incremental.snapshot.enabled' is disabled, you can enable 'scan.incremental.snapshot.enabled' to use this startup mode.");
         }
         PostgresEventDeserializer deserializer =
-                new PostgresEventDeserializer(DebeziumChangelogMode.ALL, true);
+                new PostgresEventDeserializer(
+                        DebeziumChangelogMode.ALL, true, sourceConfig.getServerTimeZone());
         PostgresOffsetFactory offsetFactory = new PostgresOffsetFactory();
         if (enableParallelRead) {
             JdbcIncrementalSource<Event> parallelSource =

@@ -22,13 +22,14 @@ import com.ververica.cdc.common.event.Event;
 import com.ververica.cdc.common.schema.Schema;
 import com.ververica.cdc.common.types.BigIntType;
 import com.ververica.cdc.common.types.DataType;
-import com.ververica.cdc.common.types.DateType;
+import com.ververica.cdc.common.types.DataTypes;
 import com.ververica.cdc.common.types.FloatType;
 import com.ververica.cdc.common.types.IntType;
 import com.ververica.cdc.common.types.LocalZonedTimestampType;
 import com.ververica.cdc.common.types.TimestampType;
 import com.ververica.cdc.common.types.VarCharType;
 import com.ververica.cdc.common.types.ZonedTimestampType;
+import com.ververica.cdc.connectors.oracle.dto.ColumnInfo;
 import com.ververica.cdc.connectors.oracle.source.config.OracleSourceConfig;
 import com.ververica.cdc.connectors.oracle.utils.DebeziumUtils;
 import com.ververica.cdc.debezium.DebeziumDeserializationSchema;
@@ -45,10 +46,9 @@ import javax.annotation.Nullable;
 import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
-import java.util.Map;
+import java.util.Locale;
 import java.util.Properties;
 import java.util.Set;
 
@@ -132,33 +132,35 @@ public class OracleDebeziumSourceFunction<T> extends DebeziumSourceFunction<T> {
     }
 
     private Schema getSchema(JdbcConnection jdbc, TableId tableId) {
-        List<Map<String, String>> columns = showCreateTable(jdbc, tableId);
+        List<ColumnInfo> columns = showCreateTable(jdbc, tableId);
         List<String> pks = getTablePks(jdbc, tableId);
         List<com.ververica.cdc.common.schema.Column> list = new ArrayList<>();
-        for (Map<String, String> map : columns) {
+        for (ColumnInfo columnInfo : columns) {
             DataType dataType = null;
-            List<String> list2 = new ArrayList<String>();
-            list2.addAll(map.values());
-            String type = list2.get(0);
-            dataType = getDataType(type);
-            List<String> list1 = new ArrayList<String>();
-            list1.addAll(map.keySet());
-            com.ververica.cdc.common.schema.Column column1 =
-                    com.ververica.cdc.common.schema.Column.metadataColumn(list1.get(0), dataType);
-            list.add(column1);
+            dataType = getDataType(columnInfo);
+            com.ververica.cdc.common.schema.Column column =
+                    com.ververica.cdc.common.schema.Column.metadataColumn(
+                            columnInfo.getColumnName().toLowerCase(Locale.ROOT), dataType);
+            list.add(column);
         }
         return Schema.newBuilder().setColumns(list).primaryKey(pks).build();
     }
 
-    private DataType getDataType(String type) {
+    private DataType getDataType(ColumnInfo columnInfo) {
+        String type = columnInfo.getDataType();
         DataType dataType;
         switch (type) {
             case "VARCHAR2":
+            case "CHAR":
+                dataType =
+                        columnInfo.getDataLength() == 0
+                                ? new VarCharType(255)
+                                : new VarCharType(columnInfo.getDataLength());
+                break;
             case "BLOB":
             case "CLOB":
             case "TEXT":
-            case "CHAR":
-                dataType = new VarCharType();
+                dataType = DataTypes.STRING();
                 break;
             case "NUMBER":
                 dataType = new IntType();
@@ -167,7 +169,7 @@ public class OracleDebeziumSourceFunction<T> extends DebeziumSourceFunction<T> {
                 dataType = new BigIntType();
                 break;
             case "DATE":
-                dataType = new DateType();
+                dataType = new TimestampType();
                 break;
             case "FLOAT":
                 dataType = new FloatType();
@@ -193,24 +195,28 @@ public class OracleDebeziumSourceFunction<T> extends DebeziumSourceFunction<T> {
         return dataType;
     }
 
-    private List<Map<String, String>> showCreateTable(JdbcConnection jdbc, TableId tableId) {
-        List<Map<String, String>> list = new ArrayList<>();
+    private List<ColumnInfo> showCreateTable(JdbcConnection jdbc, TableId tableId) {
+        List<ColumnInfo> list = new ArrayList<>();
         final String showCreateTableQuery =
                 String.format(
-                        "select COLUMN_NAME,DATA_TYPE from all_tab_columns where Table_Name='%s' order by COLUMN_ID",
+                        "select COLUMN_NAME,DATA_TYPE,DATA_LENGTH from all_tab_columns where Table_Name='%s' order by COLUMN_ID",
                         tableId.table());
         try {
             return jdbc.queryAndMap(
                     showCreateTableQuery,
                     rs -> {
                         while (rs.next()) {
+                            ColumnInfo columnInfo = new ColumnInfo();
                             String columnName = null;
                             String type = null;
-                            Map<String, String> map = new HashMap<>();
+                            Integer dataLength = null;
                             columnName = rs.getString(1);
                             type = rs.getString(2);
-                            map.put(columnName, type);
-                            list.add(map);
+                            dataLength = rs.getInt(3);
+                            columnInfo.setColumnName(columnName);
+                            columnInfo.setDataType(type);
+                            columnInfo.setDataLength(dataLength);
+                            list.add(columnInfo);
                         }
                         return list;
                     });
@@ -232,8 +238,7 @@ public class OracleDebeziumSourceFunction<T> extends DebeziumSourceFunction<T> {
                     rs -> {
                         while (rs.next()) {
                             String columnName = null;
-                            columnName = rs.getString(1);
-                            list.add(columnName);
+                            list.add(columnName.toLowerCase(Locale.ROOT));
                         }
                         return list;
                     });

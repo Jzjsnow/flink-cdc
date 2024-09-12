@@ -27,6 +27,11 @@ import java.time.Duration;
 @PublicEvolving
 public class OracleDataSourceOptions {
 
+    public static final ConfigOption<String> JDBC_URL =
+            ConfigOptions.key("jdbc.url")
+                    .stringType()
+                    .noDefaultValue()
+                    .withDescription("The jdbc url.");
     public static final ConfigOption<String> SCHEMALIST =
             ConfigOptions.key("schemalist")
                     .stringType()
