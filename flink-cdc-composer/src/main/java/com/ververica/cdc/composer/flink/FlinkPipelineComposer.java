@@ -144,6 +144,9 @@ public class FlinkPipelineComposer implements PipelineComposer {
         // Add framework JARs
         addFrameworkJars();
 
+        // Add checkpoint configuration
+        addCheckPointConfiguration(env, pipelineDef);
+
         return new FlinkPipelineExecution(
                 env, pipelineDef.getConfig().get(PipelineOptions.PIPELINE_NAME), isBlocking);
     }
@@ -186,6 +189,26 @@ public class FlinkPipelineComposer implements PipelineComposer {
             }
         } catch (Exception e) {
             throw new RuntimeException("Failed to search and add Flink CDC framework JARs", e);
+        }
+    }
+
+    private void addCheckPointConfiguration(
+            StreamExecutionEnvironment env, PipelineDef pipelineDef) {
+        if (pipelineDef.getConfig().contains(PipelineOptions.CHECKPOINTING_INTERVAL)) {
+            env.getCheckpointConfig()
+                    .setCheckpointInterval(
+                            pipelineDef
+                                    .getConfig()
+                                    .get(PipelineOptions.CHECKPOINTING_INTERVAL)
+                                    .toMillis());
+        }
+        if (pipelineDef.getConfig().contains(PipelineOptions.CHECKPOINTING_TIMEOUT)) {
+            env.getCheckpointConfig()
+                    .setCheckpointTimeout(
+                            pipelineDef
+                                    .getConfig()
+                                    .get(PipelineOptions.CHECKPOINTING_TIMEOUT)
+                                    .toMillis());
         }
     }
 

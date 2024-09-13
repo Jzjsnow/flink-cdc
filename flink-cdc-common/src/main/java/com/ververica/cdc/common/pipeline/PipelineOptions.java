@@ -16,13 +16,19 @@
 
 package com.ververica.cdc.common.pipeline;
 
+import org.apache.flink.configuration.description.TextElement;
+
 import com.ververica.cdc.common.annotation.PublicEvolving;
 import com.ververica.cdc.common.configuration.ConfigOption;
 import com.ververica.cdc.common.configuration.ConfigOptions;
 import com.ververica.cdc.common.configuration.description.Description;
 import com.ververica.cdc.common.configuration.description.ListElement;
 
+import java.time.Duration;
+
 import static com.ververica.cdc.common.configuration.description.TextElement.text;
+import static org.apache.flink.streaming.api.environment.ExecutionCheckpointingOptions.MAX_CONCURRENT_CHECKPOINTS;
+import static org.apache.flink.streaming.api.environment.ExecutionCheckpointingOptions.MIN_PAUSE_BETWEEN_CHECKPOINTS;
 
 /** Predefined pipeline configuration options. */
 @PublicEvolving
@@ -107,6 +113,31 @@ public class PipelineOptions {
                     .stringType()
                     .defaultValue("")
                     .withDescription("The location of the private key for decryption.");
+
+    public static final ConfigOption<Duration> CHECKPOINTING_TIMEOUT =
+            ConfigOptions.key("execution.checkpointing.timeout")
+                    .durationType()
+                    .defaultValue(Duration.ofMinutes(10))
+                    .withDescription(
+                            "The maximum time that a checkpoint may take before being discarded.");
+
+    public static final ConfigOption<Duration> CHECKPOINTING_INTERVAL =
+            ConfigOptions.key("execution.checkpointing.interval")
+                    .durationType()
+                    .noDefaultValue()
+                    .withDescription(
+                            org.apache.flink.configuration.description.Description.builder()
+                                    .text(
+                                            "Gets the interval in which checkpoints are periodically scheduled.")
+                                    .linebreak()
+                                    .linebreak()
+                                    .text(
+                                            "This setting defines the base interval. Checkpoint triggering may be delayed by the settings "
+                                                    + "%s and %s",
+                                            TextElement.code(MAX_CONCURRENT_CHECKPOINTS.key()),
+                                            TextElement.code(MIN_PAUSE_BETWEEN_CHECKPOINTS.key()))
+                                    .build()
+                                    .toString());
 
     private PipelineOptions() {}
 }
