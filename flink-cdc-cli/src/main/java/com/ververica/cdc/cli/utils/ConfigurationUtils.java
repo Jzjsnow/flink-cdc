@@ -25,10 +25,19 @@ import com.ververica.cdc.common.configuration.Configuration;
 import java.io.FileNotFoundException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
 
 /** Utilities for handling {@link Configuration}. */
 public class ConfigurationUtils {
+    private static final String COMMAND_LINE_PROPERTY_PREFIX = "-D";
+    private static final String COMMAND_LINE_PROPERTY_IDENTIFIER = "D";
+    private static final String COMMAND_LINE_PROPERTY_DELIMITER = "=";
+
     public static Configuration loadMapFormattedConfig(Path configPath) throws Exception {
         if (!Files.exists(configPath)) {
             throw new FileNotFoundException(
@@ -46,5 +55,64 @@ public class ConfigurationUtils {
                             "Failed to load config file \"%s\" to key-value pairs", configPath),
                     e);
         }
+    }
+
+    /**
+     * Convert properties in the command line that begin with “-D” to “D” to ensure that the
+     * properties can be parsed into the command line args.
+     *
+     * @param args
+     * @return
+     */
+    public static String[] filterProperties(String[] args) {
+        return Arrays.stream(args)
+                .map(
+                        arg -> {
+                            if (arg.startsWith(COMMAND_LINE_PROPERTY_PREFIX)
+                                    && arg.contains(COMMAND_LINE_PROPERTY_DELIMITER)) {
+                                return arg.substring(1);
+                            } else {
+                                return arg;
+                            }
+                        })
+                .toArray(String[]::new);
+    }
+
+    public static Configuration getCliConfiguration(List<String> unparsedArgs) {
+        List<String> flinkArgs =
+                unparsedArgs.stream()
+                        .filter(ConfigurationUtils::isValidProperty)
+                        .collect(Collectors.toList());
+        Map<String, String> flinkProperties = new HashMap<>();
+        for (String flinkArg : flinkArgs) {
+            List<String> property = parseProperties(flinkArg);
+            if (!property.isEmpty()) {
+                flinkProperties.put(property.get(0), property.get(1));
+            }
+        }
+        return Configuration.fromMap(flinkProperties);
+    }
+
+    private static boolean isValidProperty(String property) {
+        return // check if the property starts with D
+        property.startsWith(COMMAND_LINE_PROPERTY_IDENTIFIER)
+                // check if the property contains both key and value
+                && property.contains(COMMAND_LINE_PROPERTY_DELIMITER)
+                // Check if the key is not empty
+                && property.indexOf(COMMAND_LINE_PROPERTY_DELIMITER) > 1
+                // Check if the value is not empty
+                && property.length() > property.indexOf(COMMAND_LINE_PROPERTY_DELIMITER) + 1;
+    }
+
+    private static List<String> parseProperties(String keyValue) {
+        List<String> properties = new ArrayList<>();
+        final int pos = keyValue.indexOf('=');
+
+        final String key = keyValue.substring(1, pos);
+        final String value = keyValue.substring(pos + 1);
+        properties.add(key);
+        properties.add(value);
+
+        return properties;
     }
 }

@@ -50,6 +50,8 @@ import java.util.stream.Collectors;
 import static com.ververica.cdc.cli.CliFrontendOptions.SAVEPOINT_ALLOW_NON_RESTORED_OPTION;
 import static com.ververica.cdc.cli.CliFrontendOptions.SAVEPOINT_CLAIM_MODE;
 import static com.ververica.cdc.cli.CliFrontendOptions.SAVEPOINT_PATH_OPTION;
+import static com.ververica.cdc.cli.utils.ConfigurationUtils.filterProperties;
+import static com.ververica.cdc.cli.utils.ConfigurationUtils.getCliConfiguration;
 
 /** The frontend entrypoint for the command-line interface of Flink CDC. */
 public class CliFrontend {
@@ -60,7 +62,7 @@ public class CliFrontend {
     public static void main(String[] args) throws Exception {
         Options cliOptions = CliFrontendOptions.initializeOptions();
         CommandLineParser parser = new DefaultParser();
-        CommandLine commandLine = parser.parse(cliOptions, args);
+        CommandLine commandLine = parser.parse(cliOptions, filterProperties(args));
 
         // Help message
         if (args.length == 0 || commandLine.hasOption(CliFrontendOptions.HELP)) {
@@ -94,6 +96,8 @@ public class CliFrontend {
                     String.format("Cannot find pipeline definition file \"%s\"", pipelineDefPath));
         }
 
+        Configuration cliConfiguration = getCliConfiguration(unparsedArgs);
+
         // Global pipeline configuration
         Configuration globalPipelineConfig = getGlobalConfig(commandLine);
 
@@ -108,7 +112,7 @@ public class CliFrontend {
             // Build executor
             return new CliExecutor(
                     pipelineDefPath,
-                    null,
+                    new Configuration(),
                     globalPipelineConfig,
                     commandLine.hasOption(CliFrontendOptions.USE_MINI_CLUSTER),
                     new ArrayList<>(),
@@ -152,7 +156,8 @@ public class CliFrontend {
                     additionalJars,
                     savepointSettings,
                     true,
-                    applicationConfiguration);
+                    applicationConfiguration,
+                    cliConfiguration);
         }
         // Build executor
         return new CliExecutor(
@@ -161,7 +166,10 @@ public class CliFrontend {
                 globalPipelineConfig,
                 commandLine.hasOption(CliFrontendOptions.USE_MINI_CLUSTER),
                 additionalJars,
-                savepointSettings);
+                savepointSettings,
+                false,
+                null,
+                cliConfiguration);
     }
 
     /** create a CliExecutor to submit a Flink application on the client. */

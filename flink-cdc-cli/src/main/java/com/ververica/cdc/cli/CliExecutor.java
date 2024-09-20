@@ -37,7 +37,9 @@ import com.ververica.cdc.composer.definition.PipelineDef;
 import java.nio.file.Path;
 import java.util.Collections;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
+import java.util.stream.Collectors;
 
 import static com.ververica.cdc.cli.CliFrontend.addShipFile;
 
@@ -57,6 +59,9 @@ public class CliExecutor {
     private final boolean useApplicationMode;
     private final ApplicationConfiguration applicationConfiguration;
 
+    private final Configuration cliConfiguration;
+    private static final String FLINK_CONF_PREFIX = "flink-conf.";
+
     public CliExecutor(
             Path pipelineDefPath,
             Configuration flinkConfig,
@@ -72,7 +77,8 @@ public class CliExecutor {
                 additionalJars,
                 savepointSettings,
                 false,
-                null);
+                null,
+                new Configuration());
     }
 
     public CliExecutor(
@@ -83,7 +89,8 @@ public class CliExecutor {
             List<Path> additionalJars,
             SavepointRestoreSettings savepointSettings,
             boolean useApplicationMode,
-            ApplicationConfiguration applicationConfiguration) {
+            ApplicationConfiguration applicationConfiguration,
+            Configuration cliConfiguration) {
         this.pipelineDefPath = pipelineDefPath;
         this.flinkConfig = flinkConfig;
         this.globalPipelineConfig = globalPipelineConfig;
@@ -92,6 +99,7 @@ public class CliExecutor {
         this.savepointSettings = savepointSettings;
         this.useApplicationMode = useApplicationMode;
         this.applicationConfiguration = applicationConfiguration;
+        this.cliConfiguration = cliConfiguration;
     }
 
     public PipelineExecution.ExecutionInfo run() throws Exception {
@@ -99,6 +107,11 @@ public class CliExecutor {
         PipelineDefinitionParser pipelineDefinitionParser = new YamlPipelineDefinitionParser();
         PipelineDef pipelineDef =
                 pipelineDefinitionParser.parse(pipelineDefPath, globalPipelineConfig);
+
+        // Add Flink configuration from pipeline definition to flinkConfig
+        addFlinkConfigurationFromPipelineDef(flinkConfig, pipelineDef);
+        // Add Flink configuration from cli to flinkConfig
+        flinkConfig.addAll(cliConfiguration);
 
         // If run the pipeline in application mode, submit an application for execution in
         // "Application Mode" with configurations
@@ -181,6 +194,30 @@ public class CliExecutor {
                 .toString();
     }
 
+    private void addFlinkConfigurationFromPipelineDef(
+            Configuration flinkConfig, PipelineDef pipelineDef) {
+        Map<String, String> pipelineFlinkConfigs = pipelineDef.getConfig().toMap();
+        if (pipelineFlinkConfigs.containsKey(PipelineOptions.PIPELINE_NAME.key())) {
+            flinkConfig.set(
+                    YarnApplicationOptions.APPLICATION_NAME,
+                    pipelineFlinkConfigs.get(PipelineOptions.PIPELINE_NAME.key()));
+        }
+        Map<String, String> flinkConfToAdd =
+                pipelineFlinkConfigs.entrySet().stream()
+                        .filter(
+                                pipelineConfig ->
+                                        pipelineConfig.getKey().startsWith(FLINK_CONF_PREFIX))
+                        .collect(
+                                Collectors.toMap(
+                                        pipelineConfig ->
+                                                pipelineConfig
+                                                        .getKey()
+                                                        .substring(FLINK_CONF_PREFIX.length()),
+                                        Map.Entry::getValue));
+        Configuration newFlinkConf = Configuration.fromMap(flinkConfToAdd);
+        flinkConfig.addAll(newFlinkConf);
+    }
+
     @VisibleForTesting
     void setComposer(PipelineComposer composer) {
         this.composer = composer;
@@ -194,6 +231,11 @@ public class CliExecutor {
     @VisibleForTesting
     public Configuration getGlobalPipelineConfig() {
         return globalPipelineConfig;
+    }
+
+    @VisibleForTesting
+    public Configuration getCliConfiguration() {
+        return cliConfiguration;
     }
 
     @VisibleForTesting

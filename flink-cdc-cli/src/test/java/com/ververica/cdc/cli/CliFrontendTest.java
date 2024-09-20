@@ -33,7 +33,10 @@ import java.io.ByteArrayOutputStream;
 import java.io.PrintStream;
 import java.net.URL;
 import java.nio.file.Paths;
+import java.util.HashMap;
+import java.util.Map;
 
+import static com.ververica.cdc.cli.utils.ConfigurationUtils.filterProperties;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
@@ -184,5 +187,42 @@ class CliFrontendTest {
         public PipelineExecution compose(PipelineDef pipelineDef) {
             return () -> new PipelineExecution.ExecutionInfo("fake-id", "fake-description");
         }
+    }
+
+    @Test
+    void testFilterProperties() throws Exception {
+        String[] args =
+                filterProperties(
+                        new String[] {
+                            pipelineDef(),
+                            "--flink-home",
+                            flinkHome(),
+                            "--global-config",
+                            globalPipelineConfig(),
+                            "--yarn-application",
+                            "-Djobmanager.memory.process.size=2048m",
+                            "-Dtaskmanager.memory.process.size=4096m",
+                            "-Dyarn.application.name=\"my test job\"",
+                            "-Dyarn.application.queue=myqueue",
+                            // The following properties with empty key/value are expected to be
+                            // filtered out
+                            "-D=test_empty_key",
+                            "-Dtest.empty.value=",
+                            "-D="
+                        });
+        CliExecutor executor = createExecutor(args);
+
+        assertThat(executor.getCliConfiguration().toMap()).isEqualTo(getFilteredPropertyMap());
+    }
+
+    private Map<String, String> getFilteredPropertyMap() {
+        return new HashMap<String, String>() {
+            {
+                put("jobmanager.memory.process.size", "2048m");
+                put("taskmanager.memory.process.size", "4096m");
+                put("yarn.application.name", "\"my test job\"");
+                put("yarn.application.queue", "myqueue");
+            }
+        };
     }
 }
