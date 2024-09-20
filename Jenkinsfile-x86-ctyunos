@@ -56,7 +56,6 @@ pipeline {
                             '<revision>(.*?)</revision>', 
                             { match -> match[1] }         
                         ).trim()
-                        println "getassemblyversion=" + getassemblyversion
                         pomversion = processedContent
                         getassemblyversion="flink-cdc-"+pomversion
                         println "getassemblyversion=" + getassemblyversion
