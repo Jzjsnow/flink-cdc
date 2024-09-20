@@ -115,13 +115,13 @@ public class DorisRowConverterTest {
         for (int i = 0; i < recordData.getArity(); i++) {
             DorisRowConverter.SerializationConverter converter =
                     DorisRowConverter.createNullableExternalConverter(
-                            columns.get(i).getType(), ZoneId.of("GMT+08:00"));
+                            columns.get(i).getType(), ZoneId.of("Z"));
             row.add(converter.serialize(i, recordData));
         }
         Assert.assertEquals(
                 "[true, 1.2, 1.2345, 1, 32, 64, 128, 2021-01-01 08:00:00.000000, 2021-01-01, a, doris, 2021-01-01 "
                         + "08:01:11.000000, 2021-01-01 08:01:11.123000, 2021-01-01 08:01:11.123456, 2021-01-01 "
-                        + "16:01:11.000000, 2021-01-01 16:01:11.123000, 2021-01-01 16:01:11.123456]",
+                        + "08:01:11.000000, 2021-01-01 08:01:11.123000, 2021-01-01 08:01:11.123456]",
                 row.toString());
     }
 
