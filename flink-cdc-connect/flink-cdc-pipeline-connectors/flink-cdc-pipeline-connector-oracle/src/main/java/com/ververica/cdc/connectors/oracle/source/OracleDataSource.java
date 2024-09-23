@@ -58,8 +58,7 @@ public class OracleDataSource implements DataSource {
                 config.get(OracleDataSourceOptions.DATABASE_TABLE_CASE_INSENSITIVE));
         properties.setProperty(
                 "database.connection.adapter",
-                config.get(
-                        OracleDataSourceOptions.DATABASE_CONNECTION_ADAPTER));
+                config.get(OracleDataSourceOptions.DATABASE_CONNECTION_ADAPTER));
         properties.setProperty(
                 "log.mining.strategy", config.get(OracleDataSourceOptions.LOG_MINING_STRATEGY));
         properties.setProperty(
