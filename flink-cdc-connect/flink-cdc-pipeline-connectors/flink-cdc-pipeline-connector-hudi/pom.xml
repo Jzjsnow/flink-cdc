@@ -79,7 +79,7 @@ under the License.
         <dependency>
             <groupId>org.apache.hudi</groupId>
             <artifactId>hudi-flink1.16-bundle</artifactId>
-            <version>0.13.0</version>
+            <version>${hudi.version}</version>
             <exclusions>
                 <exclusion>
                     <artifactId>httpclient</artifactId>

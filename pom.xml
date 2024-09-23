@@ -92,7 +92,8 @@ under the License.
         <markBundledAsOptional>true</markBundledAsOptional>
         <flatten-maven-plugin.version>1.5.0</flatten-maven-plugin.version>
         <hadoop.version>3.3.2</hadoop.version>
-        <iceberg.version>1.4.3</iceberg.version>
+        <iceberg.version>1.4.3-cty-2.0.0</iceberg.version>
+        <hudi.version>0.14.0-cty-1.0.0</hudi.version>
     </properties>
 
     <dependencyManagement>
@@ -112,6 +113,19 @@ under the License.
             </dependency>
         </dependencies>
     </dependencyManagement>
+
+    <repositories>
+        <repository>
+            <id>releases</id>
+            <url>https://devops.ctcdn.cn/nexus/repository/bigdata-release/</url>
+            <snapshots>
+                <enabled>false</enabled>
+            </snapshots>
+            <releases>
+                <enabled>true</enabled>
+            </releases>
+        </repository>
+    </repositories>
 
     <dependencies>
         <!-- Apache Flink dependencies -->
