@@ -32,7 +32,7 @@ public class HudiDataSinkOptions {
                     .noDefaultValue()
                     .withDescription("tablename.");
     public static final ConfigOption<String> TABLEPATH =
-            ConfigOptions.key("option.pipeline.path")
+            ConfigOptions.key("tablepath")
                     .stringType()
                     .noDefaultValue()
                     .withDescription("table hdfs path.");
