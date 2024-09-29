@@ -39,12 +39,14 @@ import static com.ververica.cdc.connectors.mysql.source.utils.RecordUtils.getBin
 import static com.ververica.cdc.connectors.mysql.source.utils.RecordUtils.getFetchTimestamp;
 import static com.ververica.cdc.connectors.mysql.source.utils.RecordUtils.getHistoryRecord;
 import static com.ververica.cdc.connectors.mysql.source.utils.RecordUtils.getMessageTimestamp;
+import static com.ververica.cdc.connectors.mysql.source.utils.RecordUtils.getRecordBytes;
 import static com.ververica.cdc.connectors.mysql.source.utils.RecordUtils.getWatermark;
 import static com.ververica.cdc.connectors.mysql.source.utils.RecordUtils.isDataChangeRecord;
 import static com.ververica.cdc.connectors.mysql.source.utils.RecordUtils.isHeartbeatEvent;
 import static com.ververica.cdc.connectors.mysql.source.utils.RecordUtils.isHighWatermarkEvent;
 import static com.ververica.cdc.connectors.mysql.source.utils.RecordUtils.isSchemaChangeEvent;
 import static com.ververica.cdc.connectors.mysql.source.utils.RecordUtils.isWatermarkEvent;
+import static org.apache.commons.math3.util.Precision.round;
 
 /**
  * The {@link RecordEmitter} implementation for {@link MySqlSourceReader}.
@@ -62,6 +64,9 @@ public class MySqlRecordEmitter<T> implements RecordEmitter<SourceRecords, T, My
     private final MySqlSourceReaderMetrics sourceReaderMetrics;
     private final boolean includeSchemaChanges;
     private final OutputCollector<T> outputCollector;
+    private double counter = 0;
+    private double size = 0.0;
+    private Long firstEventTimestamp = null;
 
     public MySqlRecordEmitter(
             DebeziumDeserializationSchema<T> debeziumDeserializationSchema,
@@ -86,6 +91,10 @@ public class MySqlRecordEmitter<T> implements RecordEmitter<SourceRecords, T, My
     protected void processElement(
             SourceRecord element, SourceOutput<T> output, MySqlSplitState splitState)
             throws Exception {
+        // timestamp for the first record arrived
+        if (firstEventTimestamp == null) {
+            firstEventTimestamp = System.currentTimeMillis();
+        }
         if (isWatermarkEvent(element)) {
             BinlogOffset watermark = getWatermark(element);
             if (isHighWatermarkEvent(element) && splitState.isSnapshotSplitState()) {
@@ -106,6 +115,8 @@ public class MySqlRecordEmitter<T> implements RecordEmitter<SourceRecords, T, My
             }
         } else if (isDataChangeRecord(element)) {
             updateStartingOffsetForSplit(splitState, element);
+            counter++;
+            size += getRecordBytes(element);
             reportMetrics(element);
             emitElement(element, output);
         } else if (isHeartbeatEvent(element)) {
@@ -133,12 +144,30 @@ public class MySqlRecordEmitter<T> implements RecordEmitter<SourceRecords, T, My
         Long messageTimestamp = getMessageTimestamp(element);
 
         if (messageTimestamp != null && messageTimestamp > 0L) {
-            // report fetch delay
+            // report mysql fetch delay
             Long fetchTimestamp = getFetchTimestamp(element);
             if (fetchTimestamp != null && fetchTimestamp >= messageTimestamp) {
-                // report fetch delay
+                // report mysql fetch delay
                 sourceReaderMetrics.recordFetchDelay(fetchTimestamp - messageTimestamp);
             }
+        }
+        // report mysql num of records in
+        sourceReaderMetrics.recordNumRecordsIn(counter);
+        // report mysql num of bytes in
+        sourceReaderMetrics.recordNumBytesIn(size);
+        long currentTimestamp = System.currentTimeMillis();
+        if (firstEventTimestamp == null) {
+            sourceReaderMetrics.recordNumRecordsInRate(0.0);
+            sourceReaderMetrics.recordNumBytesInRate(0.0);
+        } else {
+            double rateOfRecords = counter / (currentTimestamp - firstEventTimestamp) * 1000;
+            double rateOfBytes = size / (currentTimestamp - firstEventTimestamp) * 1000;
+            rateOfRecords = round(rateOfRecords, 2);
+            rateOfBytes = round(rateOfBytes, 2);
+            // report mysql num of records in rate
+            sourceReaderMetrics.recordNumRecordsInRate(rateOfRecords);
+            // report mysql num of bytes in rate
+            sourceReaderMetrics.recordNumBytesInRate(rateOfBytes);
         }
     }
 

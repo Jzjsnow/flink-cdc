@@ -35,6 +35,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.Serializable;
+import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.Map;
@@ -47,6 +48,7 @@ import static com.ververica.cdc.connectors.base.utils.SourceRecordUtils.getMessa
 import static com.ververica.cdc.connectors.base.utils.SourceRecordUtils.isDataChangeRecord;
 import static com.ververica.cdc.connectors.base.utils.SourceRecordUtils.isHeartbeatEvent;
 import static com.ververica.cdc.connectors.base.utils.SourceRecordUtils.isSchemaChangeEvent;
+import static org.apache.commons.math3.util.Precision.round;
 
 /**
  * The {@link RecordEmitter} implementation for {@link IncrementalSourceReader}.
@@ -71,6 +73,9 @@ public class IncrementalSourceRecordEmitter<T>
     protected final boolean includeSchemaChanges;
     protected final OutputCollector<T> outputCollector;
     protected final OffsetFactory offsetFactory;
+    private double counter = 0;
+    private double size = 0.0;
+    private Long firstEventTimestamp = null;
 
     public IncrementalSourceRecordEmitter(
             DebeziumDeserializationSchema<T> debeziumDeserializationSchema,
@@ -97,6 +102,10 @@ public class IncrementalSourceRecordEmitter<T>
     protected void processElement(
             SourceRecord element, SourceOutput<T> output, SourceSplitState splitState)
             throws Exception {
+        // timestamp for the first record arrived
+        if (firstEventTimestamp == null) {
+            firstEventTimestamp = System.currentTimeMillis();
+        }
         if (isWatermarkEvent(element)) {
             LOG.trace("Process WatermarkEvent: {}; splitState = {}", element, splitState);
             Offset watermark = getWatermark(element);
@@ -119,6 +128,8 @@ public class IncrementalSourceRecordEmitter<T>
         } else if (isDataChangeRecord(element)) {
             LOG.trace("Process DataChangeRecord: {}; splitState = {}", element, splitState);
             updateStreamSplitState(splitState, element);
+            counter++;
+            size += getRecordBytes(element);
             reportMetrics(element);
             emitElement(element, output);
         } else if (isHeartbeatEvent(element)) {
@@ -171,6 +182,24 @@ public class IncrementalSourceRecordEmitter<T>
                 sourceReaderMetrics.recordFetchDelay(fetchTimestamp - messageTimestamp);
             }
         }
+        // report postgres num of records in
+        sourceReaderMetrics.recordNumRecordsIn(counter);
+        // report postgres num of bytes in
+        sourceReaderMetrics.recordNumBytesIn(size);
+        long currentTimestamp = System.currentTimeMillis();
+        if (firstEventTimestamp == null) {
+            sourceReaderMetrics.recordNumRecordsInRate(0.0);
+            sourceReaderMetrics.recordNumBytesInRate(0.0);
+        } else {
+            double rateOfRecords = counter / (currentTimestamp - firstEventTimestamp) * 1000;
+            double rateOfBytes = size / (currentTimestamp - firstEventTimestamp) * 1000;
+            rateOfRecords = round(rateOfRecords, 2);
+            rateOfBytes = round(rateOfBytes, 2);
+            // report postgres num of records in rate
+            sourceReaderMetrics.recordNumRecordsInRate(rateOfRecords);
+            // report postgres num of bytes in rate
+            sourceReaderMetrics.recordNumBytesInRate(rateOfBytes);
+        }
     }
 
     private static class OutputCollector<T> implements Collector<T>, Serializable {
@@ -185,5 +214,10 @@ public class IncrementalSourceRecordEmitter<T>
         public void close() {
             // do nothing
         }
+    }
+
+    private static double getRecordBytes(SourceRecord record) {
+        byte[] bytesOfRecord = record.toString().getBytes(StandardCharsets.UTF_8);
+        return bytesOfRecord.length;
     }
 }

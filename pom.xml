@@ -125,6 +125,16 @@ under the License.
                 <enabled>true</enabled>
             </releases>
         </repository>
+        <repository>
+            <id>ctyun</id>
+            <url>https://devops.ctcdn.cn/nexus/repository/dbmpv2-releases/</url>
+            <snapshots>
+                <enabled>false</enabled>
+            </snapshots>
+            <releases>
+                <enabled>true</enabled>
+            </releases>
+        </repository>
     </repositories>
 
     <dependencies>

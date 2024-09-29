@@ -38,6 +38,7 @@ import org.slf4j.LoggerFactory;
 import java.io.IOException;
 import java.math.BigDecimal;
 import java.math.BigInteger;
+import java.nio.charset.StandardCharsets;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.time.Instant;
@@ -477,6 +478,11 @@ public class RecordUtils {
 
     private static BigDecimal toBigDecimal(Object numericObj) {
         return new BigDecimal(numericObj.toString());
+    }
+
+    public static double getRecordBytes(SourceRecord record) {
+        byte[] bytesOfRecord = record.toString().getBytes(StandardCharsets.UTF_8);
+        return bytesOfRecord.length;
     }
 
     public static HistoryRecord getHistoryRecord(SourceRecord schemaRecord) throws IOException {

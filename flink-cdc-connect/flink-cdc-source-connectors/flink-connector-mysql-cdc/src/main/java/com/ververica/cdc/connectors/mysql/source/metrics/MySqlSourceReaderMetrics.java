@@ -26,6 +26,8 @@ import com.ververica.cdc.connectors.mysql.source.reader.MySqlSourceReader;
 public class MySqlSourceReaderMetrics {
 
     private final MetricGroup metricGroup;
+    private static final String METRIC_NAME_FORMAT = "%s_%s";
+    private static final String FLINK_CDC_SOURCE_MYSQL = "flinkCDC_Source_Mysql";
 
     /**
      * currentFetchEventTimeLag = FetchTime - messageTimestamp, where the FetchTime is the time the
@@ -33,20 +35,102 @@ public class MySqlSourceReaderMetrics {
      */
     private volatile long fetchDelay = 0L;
 
+    /**
+     * numRecordsIn, typically represents the number of MySQL records that have been sent or
+     * transmitted.
+     */
+    private volatile double numRecordsIn = 0L;
+
+    /**
+     * numBytesIn, typically represents the bytes of MySQL records that have been sent or
+     * transmitted.
+     */
+    private volatile double numBytesIn = 0L;
+
+    /**
+     * numRecordsInRate, typically represents the rate of MySQL records that are being received or
+     * transmitted over a specified period, calculated as the change in the number of received
+     * records divided by the time interval.
+     */
+    private volatile double numRecordsInRate = 0L;
+
+    /**
+     * numBytesInRate, typically represents the rate of bytes of MySQL records that are being
+     * received or transmitted over a specified period, calculated as the change in the total size
+     * of received records divided by the time interval.
+     */
+    private volatile double numBytesInRate = 0L;
+
     public MySqlSourceReaderMetrics(MetricGroup metricGroup) {
         this.metricGroup = metricGroup;
     }
 
     public void registerMetrics() {
         metricGroup.gauge(
-                MetricNames.CURRENT_FETCH_EVENT_TIME_LAG, (Gauge<Long>) this::getFetchDelay);
+                String.format(
+                        METRIC_NAME_FORMAT,
+                        FLINK_CDC_SOURCE_MYSQL,
+                        MetricNames.CURRENT_FETCH_EVENT_TIME_LAG),
+                (Gauge<Long>) this::getFetchDelay);
+        metricGroup.gauge(
+                String.format(
+                        METRIC_NAME_FORMAT, FLINK_CDC_SOURCE_MYSQL, MetricNames.IO_NUM_RECORDS_IN),
+                (Gauge<Double>) this::getNumRecordsIn);
+        metricGroup.gauge(
+                String.format(
+                        METRIC_NAME_FORMAT, FLINK_CDC_SOURCE_MYSQL, MetricNames.IO_NUM_BYTES_IN),
+                (Gauge<Double>) this::getNumBytesIn);
+        metricGroup.gauge(
+                String.format(
+                        METRIC_NAME_FORMAT,
+                        FLINK_CDC_SOURCE_MYSQL,
+                        MetricNames.IO_NUM_RECORDS_IN_RATE),
+                (Gauge<Double>) this::getNumRecordsInRate);
+        metricGroup.gauge(
+                String.format(
+                        METRIC_NAME_FORMAT,
+                        FLINK_CDC_SOURCE_MYSQL,
+                        MetricNames.IO_NUM_BYTES_IN_RATE),
+                (Gauge<Double>) this::getNumBytesInRate);
     }
 
     public long getFetchDelay() {
         return fetchDelay;
     }
 
+    public double getNumRecordsIn() {
+        return numRecordsIn;
+    }
+
+    public double getNumBytesIn() {
+        return numBytesIn;
+    }
+
+    public double getNumRecordsInRate() {
+        return numRecordsInRate;
+    }
+
+    public double getNumBytesInRate() {
+        return numBytesInRate;
+    }
+
     public void recordFetchDelay(long fetchDelay) {
         this.fetchDelay = fetchDelay;
+    }
+
+    public void recordNumRecordsIn(double numRecordsIn) {
+        this.numRecordsIn = numRecordsIn;
+    }
+
+    public void recordNumBytesIn(double numBytesIn) {
+        this.numBytesIn = numBytesIn;
+    }
+
+    public void recordNumRecordsInRate(double numRecordsInRate) {
+        this.numRecordsInRate = numRecordsInRate;
+    }
+
+    public void recordNumBytesInRate(double numBytesInRate) {
+        this.numBytesInRate = numBytesInRate;
     }
 }
