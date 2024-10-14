@@ -158,14 +158,16 @@ pipeline {
             }
             steps {
                 script {
-                    sh """
-                    ls -lh flink-cdc-dist/target
-                    rm -rf ${getassemblyversion}.tar.gz
-                    mv ${filepath} ${getassemblyversion}
-                    ls -l ${getassemblyversion}/
-                    tar -czf ${getassemblyversion}.tar.gz ${getassemblyversion}
-                    curl -v -u sys_deployer:c3lzX2RlcGxveWVyCg --upload-file ${getassemblyversion}.tar.gz https://devops.ctcdn.cn/nexus/repository/raw-repo/BigDataProduction/ccd-release-generic/3.3.3-intel-x86-ctyunos2.0.1-newtar/
-                    """
+                    withCredentials([usernamePassword(credentialsId:'credential-nexus',usernameVariable:'USERNAME',passwordVariable:'PASSWORD')]){
+                        sh """
+                        ls -lh flink-cdc-dist/target
+                        rm -rf ${getassemblyversion}.tar.gz
+                        mv ${filepath} ${getassemblyversion}
+                        ls -l ${getassemblyversion}/
+                        tar -czf ${getassemblyversion}.tar.gz ${getassemblyversion}
+                        curl -v -u ${USERNAME}:${PASSWORD} --upload-file ${getassemblyversion}.tar.gz https://devops.ctcdn.cn/nexus/repository/raw-repo/BigDataProduction/ccd-release-generic/3.3.3-intel-x86-ctyunos2.0.1-newtar/
+                        """
+                    }
                 }
             }
         }
