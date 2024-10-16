@@ -62,8 +62,10 @@ public class OracleEventDeserializer extends DebeziumEventDeserializationSchema 
     private transient CustomOracleAntlrDdlParser customParser;
 
     public OracleEventDeserializer(
-            DebeziumChangelogMode changelogMode, boolean includeSchemaChanges) {
-        super(new OracleSchemaDataTypeInference(), changelogMode);
+            DebeziumChangelogMode changelogMode,
+            boolean includeSchemaChanges,
+            String sourceTimeZone) {
+        super(new OracleSchemaDataTypeInference(), changelogMode, sourceTimeZone);
         this.includeSchemaChanges = includeSchemaChanges;
     }
 

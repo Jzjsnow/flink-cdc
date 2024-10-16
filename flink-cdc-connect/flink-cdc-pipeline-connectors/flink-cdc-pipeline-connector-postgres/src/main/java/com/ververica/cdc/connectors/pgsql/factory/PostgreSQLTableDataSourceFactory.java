@@ -20,7 +20,7 @@ import com.ververica.cdc.common.configuration.ConfigOption;
 import com.ververica.cdc.common.configuration.Configuration;
 import com.ververica.cdc.common.factories.DataSourceFactory;
 import com.ververica.cdc.common.source.DataSource;
-import com.ververica.cdc.connectors.pgsql.source.PostgresTableDataSource;
+import com.ververica.cdc.connectors.pgsql.source.PostgresDataSource;
 import com.ververica.cdc.connectors.postgres.source.config.PostgresSourceConfigFactory;
 import com.ververica.cdc.connectors.postgres.table.PostgreSQLTableSource;
 
@@ -79,7 +79,7 @@ public class PostgreSQLTableDataSourceFactory implements DataSourceFactory {
         configFactory.decodingPluginName(config.get(DECODING_PLUGIN_NAME));
         Duration duration = Duration.ofSeconds(10);
         configFactory.heartbeatInterval(duration);
-        return new PostgresTableDataSource(configFactory, config);
+        return new PostgresDataSource(configFactory, config);
     }
 
     @Override

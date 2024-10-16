@@ -78,7 +78,7 @@ import static com.ververica.cdc.connectors.pgsql.source.PostgresDataSourceOption
 
 /** A {@link DataSource} for PgSQL pipeline cdc connector. */
 @Internal
-public class PostgresTableDataSource implements DataSource, SupportsReadingMetadata {
+public class PostgresDataSource implements DataSource, SupportsReadingMetadata {
 
     private final PostgresSourceConfig sourceConfig;
     private final Configuration config;
@@ -91,8 +91,7 @@ public class PostgresTableDataSource implements DataSource, SupportsReadingMetad
     /** Metadata that is appended at the end of a physical source row. */
     protected List<String> metadataKeys;
 
-    public PostgresTableDataSource(
-            PostgresSourceConfigFactory configFactory, Configuration config) {
+    public PostgresDataSource(PostgresSourceConfigFactory configFactory, Configuration config) {
         this.sourceConfig = configFactory.create(0);
         this.config = config;
         this.metadataKeys = Collections.emptyList();
@@ -142,7 +141,9 @@ public class PostgresTableDataSource implements DataSource, SupportsReadingMetad
         }
         PostgresEventDeserializer deserializer =
                 new PostgresEventDeserializer(
-                        DebeziumChangelogMode.ALL, true, sourceConfig.getServerTimeZone());
+                        DebeziumChangelogMode.ALL,
+                        config.get(PostgresDataSourceOptions.SCHEMA_CHANGE_ENABLED),
+                        sourceConfig.getServerTimeZone());
         PostgresOffsetFactory offsetFactory = new PostgresOffsetFactory();
         if (enableParallelRead) {
             JdbcIncrementalSource<Event> parallelSource =

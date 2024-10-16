@@ -23,6 +23,8 @@ public class ColumnInfo implements Serializable {
     private String columnName;
     private String dataType;
     private Integer dataLength;
+    private Integer dataPrecision;
+    private Integer dataScale;
 
     public Integer getDataLength() {
         return dataLength;
@@ -46,5 +48,21 @@ public class ColumnInfo implements Serializable {
 
     public void setDataType(String dataType) {
         this.dataType = dataType;
+    }
+
+    public Integer getDataPrecision() {
+        return dataPrecision;
+    }
+
+    public void setDataPrecision(Integer dataPrecision) {
+        this.dataPrecision = dataPrecision;
+    }
+
+    public Integer getDataScale() {
+        return dataScale;
+    }
+
+    public void setDataScale(Integer dataScale) {
+        this.dataScale = dataScale;
     }
 }

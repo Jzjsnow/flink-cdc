@@ -20,16 +20,6 @@ import com.ververica.cdc.common.annotation.PublicEvolving;
 import com.ververica.cdc.common.event.CreateTableEvent;
 import com.ververica.cdc.common.event.Event;
 import com.ververica.cdc.common.schema.Schema;
-import com.ververica.cdc.common.types.BigIntType;
-import com.ververica.cdc.common.types.DataType;
-import com.ververica.cdc.common.types.DataTypes;
-import com.ververica.cdc.common.types.FloatType;
-import com.ververica.cdc.common.types.IntType;
-import com.ververica.cdc.common.types.LocalZonedTimestampType;
-import com.ververica.cdc.common.types.TimestampType;
-import com.ververica.cdc.common.types.VarCharType;
-import com.ververica.cdc.common.types.ZonedTimestampType;
-import com.ververica.cdc.connectors.oracle.dto.ColumnInfo;
 import com.ververica.cdc.connectors.oracle.source.config.OracleSourceConfig;
 import com.ververica.cdc.connectors.oracle.utils.DebeziumUtils;
 import com.ververica.cdc.debezium.DebeziumDeserializationSchema;
@@ -43,14 +33,12 @@ import io.debezium.relational.TableId;
 
 import javax.annotation.Nullable;
 
-import java.sql.SQLException;
-import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashSet;
-import java.util.List;
-import java.util.Locale;
 import java.util.Properties;
 import java.util.Set;
+
+import static com.ververica.cdc.connectors.oracle.utils.OracleSchemaUtils.getSchema;
 
 /**
  * The {@link OracleDebeziumSourceFunction} is a streaming data source that pulls captured change
@@ -129,121 +117,5 @@ public class OracleDebeziumSourceFunction<T> extends DebeziumSourceFunction<T> {
                         com.ververica.cdc.common.event.TableId.tableId(
                                 tableId.catalog(), tableId.table()),
                         schema));
-    }
-
-    private Schema getSchema(JdbcConnection jdbc, TableId tableId) {
-        List<ColumnInfo> columns = showCreateTable(jdbc, tableId);
-        List<String> pks = getTablePks(jdbc, tableId);
-        List<com.ververica.cdc.common.schema.Column> list = new ArrayList<>();
-        for (ColumnInfo columnInfo : columns) {
-            DataType dataType = null;
-            dataType = getDataType(columnInfo);
-            com.ververica.cdc.common.schema.Column column =
-                    com.ververica.cdc.common.schema.Column.metadataColumn(
-                            columnInfo.getColumnName().toLowerCase(Locale.ROOT), dataType);
-            list.add(column);
-        }
-        return Schema.newBuilder().setColumns(list).primaryKey(pks).build();
-    }
-
-    private DataType getDataType(ColumnInfo columnInfo) {
-        String type = columnInfo.getDataType();
-        DataType dataType;
-        switch (type) {
-            case "VARCHAR2":
-            case "CHAR":
-                dataType =
-                        columnInfo.getDataLength() == 0
-                                ? new VarCharType(255)
-                                : new VarCharType(columnInfo.getDataLength());
-                break;
-            case "BLOB":
-            case "CLOB":
-            case "TEXT":
-                dataType = DataTypes.STRING();
-                break;
-            case "NUMBER":
-                dataType = new IntType();
-                break;
-            case "LONG":
-                dataType = new BigIntType();
-                break;
-            case "DATE":
-                dataType = new TimestampType();
-                break;
-            case "FLOAT":
-                dataType = new FloatType();
-                break;
-            case "TIMESTAMP(1)":
-            case "TIMESTAMP(3)":
-            case "TIMESTAMP(6)":
-            case "TIMESTAMP(9)":
-                dataType = new TimestampType();
-                break;
-            case "TIMESTAMP(9) WITH TIME ZONE":
-            case "TIMESTAMP(6) WITH TIME ZONE":
-            case "TIMESTAMP(3) WITH TIME ZONE":
-            case "TIMESTAMP(13) WITH TIME ZONE":
-                dataType = new ZonedTimestampType();
-                break;
-            case "TIMESTAMP(6) WITH LOCAL TIME ZONE":
-                dataType = new LocalZonedTimestampType();
-                break;
-            default:
-                throw new RuntimeException("Unsupported data type:" + type);
-        }
-        return dataType;
-    }
-
-    private List<ColumnInfo> showCreateTable(JdbcConnection jdbc, TableId tableId) {
-        List<ColumnInfo> list = new ArrayList<>();
-        final String showCreateTableQuery =
-                String.format(
-                        "select COLUMN_NAME,DATA_TYPE,DATA_LENGTH from all_tab_columns where Table_Name='%s' order by COLUMN_ID",
-                        tableId.table());
-        try {
-            return jdbc.queryAndMap(
-                    showCreateTableQuery,
-                    rs -> {
-                        while (rs.next()) {
-                            ColumnInfo columnInfo = new ColumnInfo();
-                            String columnName = null;
-                            String type = null;
-                            Integer dataLength = null;
-                            columnName = rs.getString(1);
-                            type = rs.getString(2);
-                            dataLength = rs.getInt(3);
-                            columnInfo.setColumnName(columnName);
-                            columnInfo.setDataType(type);
-                            columnInfo.setDataLength(dataLength);
-                            list.add(columnInfo);
-                        }
-                        return list;
-                    });
-        } catch (SQLException e) {
-            throw new RuntimeException(
-                    String.format("Failed to show create table for %s", tableId), e);
-        }
-    }
-
-    private List<String> getTablePks(JdbcConnection jdbc, TableId tableId) {
-        List<String> list = new ArrayList<>();
-        final String showCreateTableQuery =
-                String.format(
-                        "SELECT COLUMN_NAME FROM all_constraints cons, all_cons_columns cols WHERE cols.table_name = '%s' and cols.OWNER='%s' AND cons.constraint_type = 'P' AND cons.constraint_name = cols.constraint_name AND cons.owner = cols.owner ORDER BY cols.table_name, cols.position ",
-                        tableId.table().toUpperCase(), tableId.catalog().toUpperCase());
-        try {
-            return jdbc.queryAndMap(
-                    showCreateTableQuery,
-                    rs -> {
-                        while (rs.next()) {
-                            String columnName = null;
-                            list.add(columnName.toLowerCase(Locale.ROOT));
-                        }
-                        return list;
-                    });
-        } catch (SQLException e) {
-            throw new RuntimeException(String.format("Failed to get table pks for %s", tableId), e);
-        }
     }
 }

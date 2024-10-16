@@ -31,7 +31,6 @@ import com.ververica.cdc.connectors.oracle.source.config.OracleSourceConfigFacto
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.time.Duration;
 import java.time.ZoneId;
 import java.util.HashSet;
 import java.util.Set;
@@ -46,6 +45,7 @@ public class OracleDataSourceFactory implements DataSourceFactory {
     private static final Logger LOG = LoggerFactory.getLogger(OracleDataSourceFactory.class);
 
     public static final String IDENTIFIER = "oracle";
+    public static final String COMM = ",";
 
     @Override
     public DataSource createDataSource(Context context) {
@@ -87,11 +87,10 @@ public class OracleDataSourceFactory implements DataSourceFactory {
                                         config.getOptional(OracleDataSourceOptions.PASSWORD).get())
                                 .includeSchemaChanges(true);
         configFactory.tableList(
-                config.getOptional(OracleDataSourceOptions.TABLES).get().split(","));
+                config.getOptional(OracleDataSourceOptions.TABLES).get().split(COMM));
         configFactory.databaseList(config.getOptional(OracleDataSourceOptions.DATABASE).get());
         configFactory.schemaList(
                 new String[] {config.getOptional(OracleDataSourceOptions.DATABASE).get()});
-        Duration a = Duration.ofSeconds(10);
 
         return new OracleDataSource(configFactory, config);
     }
@@ -130,6 +129,16 @@ public class OracleDataSourceFactory implements DataSourceFactory {
         options.add(OracleDataSourceOptions.SCAN_INCREMENTAL_CLOSE_IDLE_READER_ENABLED);
         options.add(OracleDataSourceOptions.HEARTBEAT_INTERVAL);
         options.add(OracleDataSourceOptions.SCHEMA_CHANGE_ENABLED);
+        options.add(OracleDataSourceOptions.SCAN_INCREMENTAL_SNAPSHOT_BACKFILL_SKIP);
+        options.add(OracleDataSourceOptions.SPLIT_KEY_EVEN_DISTRIBUTION_FACTOR_LOWER_BOUND);
+        options.add(OracleDataSourceOptions.SPLIT_KEY_EVEN_DISTRIBUTION_FACTOR_UPPER_BOUND);
+        options.add(OracleDataSourceOptions.SCAN_INCREMENTAL_SNAPSHOT_ENABLED);
+        options.add(OracleDataSourceOptions.SNAPSHOT_LOCKING_MODE);
+        options.add(OracleDataSourceOptions.HISTORY_CAPTURED_TABLES_DDL_ENABLE);
+        options.add(OracleDataSourceOptions.LOG_MINING_CONTINUOUS_MINE);
+        options.add(OracleDataSourceOptions.LOG_MINING_STRATEGY);
+        options.add(OracleDataSourceOptions.DATABASE_CONNECTION_ADAPTER);
+        options.add(OracleDataSourceOptions.DATABASE_TABLE_CASE_INSENSITIVE);
         return options;
     }
 

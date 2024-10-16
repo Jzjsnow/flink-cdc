@@ -32,12 +32,13 @@ import org.slf4j.LoggerFactory;
 
 import java.sql.Clob;
 import java.sql.DatabaseMetaData;
+import java.sql.DriverManager;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
 import java.sql.Timestamp;
-import java.time.OffsetDateTime;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
@@ -534,6 +535,11 @@ public class OracleConnection extends JdbcConnection {
     }
 
     private static ConnectionFactory resolveConnectionFactory(JdbcConfiguration config) {
+        try {
+            DriverManager.registerDriver(new oracle.jdbc.OracleDriver());
+        } catch (SQLException e) {
+            throw new DebeziumException("Oracle driver registration failed: ", e);
+        }
         return JdbcConnection.patternBasedFactory(connectionString(config));
     }
 
@@ -571,13 +577,13 @@ public class OracleConnection extends JdbcConnection {
      * @return an optional timestamp when the system change number occurred
      * @throws SQLException if a database exception occurred
      */
-    public Optional<OffsetDateTime> getScnToTimestamp(Scn scn) throws SQLException {
+    public Optional<Instant> getScnToTimestamp(Scn scn) throws SQLException {
         try {
             return queryAndMap(
                     "SELECT scn_to_timestamp('" + scn + "') FROM DUAL",
                     rs ->
                             rs.next()
-                                    ? Optional.of(rs.getObject(1, OffsetDateTime.class))
+                                    ? Optional.of(rs.getTimestamp(1).toInstant())
                                     : Optional.empty());
         } catch (SQLException e) {
             if (e.getMessage().startsWith("ORA-08181")) {

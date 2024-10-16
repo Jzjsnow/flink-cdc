@@ -16,9 +16,13 @@
 
 package com.ververica.cdc.connectors.oracle.source;
 
+import org.apache.flink.connector.base.source.reader.RecordEmitter;
+
 import com.ververica.cdc.common.annotation.Internal;
 import com.ververica.cdc.connectors.base.options.StartupOptions;
 import com.ververica.cdc.connectors.base.source.jdbc.JdbcIncrementalSource;
+import com.ververica.cdc.connectors.base.source.meta.split.SourceRecords;
+import com.ververica.cdc.connectors.base.source.meta.split.SourceSplitState;
 import com.ververica.cdc.connectors.oracle.source.config.OracleSourceConfigFactory;
 import com.ververica.cdc.connectors.oracle.source.meta.offset.RedoLogOffsetFactory;
 import com.ververica.cdc.debezium.DebeziumDeserializationSchema;
@@ -43,6 +47,7 @@ public class OracleSourceBuilder<T> {
     private RedoLogOffsetFactory offsetFactory;
     private OracleDialect dialect;
     private DebeziumDeserializationSchema<T> deserializer;
+    private static RecordEmitter recordEmitter;
 
     public OracleSourceBuilder<T> hostname(String hostname) {
         this.configFactory.hostname(hostname);
@@ -99,6 +104,12 @@ public class OracleSourceBuilder<T> {
     /** Password to use when connecting to the Oracle database server. */
     public OracleSourceBuilder<T> password(String password) {
         this.configFactory.password(password);
+        return this;
+    }
+
+    public OracleSourceBuilder<T> recordEmitter(
+            RecordEmitter<SourceRecords, T, SourceSplitState> recordEmitter) {
+        this.recordEmitter = recordEmitter;
         return this;
     }
 
@@ -263,6 +274,7 @@ public class OracleSourceBuilder<T> {
                 RedoLogOffsetFactory offsetFactory,
                 OracleDialect dataSourceDialect) {
             super(configFactory, deserializationSchema, offsetFactory, dataSourceDialect);
+            super.setRecordEmitter(recordEmitter);
         }
 
         public static <T> OracleSourceBuilder<T> builder() {

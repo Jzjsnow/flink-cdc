@@ -20,8 +20,11 @@ import com.ververica.cdc.common.annotation.Experimental;
 import com.ververica.cdc.common.annotation.PublicEvolving;
 import com.ververica.cdc.common.configuration.ConfigOption;
 import com.ververica.cdc.common.configuration.ConfigOptions;
+import com.ververica.cdc.common.configuration.Configuration;
 
 import java.time.Duration;
+import java.util.HashMap;
+import java.util.Map;
 
 /** Configurations for {@link OracleDataSource}. */
 @PublicEvolving
@@ -250,7 +253,7 @@ public class OracleDataSourceOptions {
 
     @Experimental
     public static final ConfigOption<String> DATABASE_TABLE_CASE_INSENSITIVE =
-            ConfigOptions.key("database.tablename.case.insensitive")
+            ConfigOptions.key("debezium.database.tablename.case.insensitive")
                     .stringType()
                     .defaultValue("false")
                     .withDescription(
@@ -258,23 +261,96 @@ public class OracleDataSourceOptions {
 
     @Experimental
     public static final ConfigOption<String> DATABASE_CONNECTION_ADAPTER =
-            ConfigOptions.key("database.connection.adapter")
+            ConfigOptions.key("debezium.database.connection.adapter")
                     .stringType()
                     .defaultValue("logminer")
                     .withDescription("Database connection adapter.");
 
     @Experimental
     public static final ConfigOption<String> LOG_MINING_STRATEGY =
-            ConfigOptions.key("log.mining.strategy")
+            ConfigOptions.key("debezium.log.mining.strategy")
                     .stringType()
                     .defaultValue("online_catalog")
                     .withDescription("A strategy in log data analysis or mining.");
 
     @Experimental
     public static final ConfigOption<String> LOG_MINING_CONTINUOUS_MINE =
-            ConfigOptions.key("log.mining.continuous.mine")
+            ConfigOptions.key("debezium.log.mining.continuous.mine")
                     .stringType()
                     .defaultValue("true")
                     .withDescription(
                             "A continuous or ongoing mining process in the field of log mining.");
+
+    @Experimental
+    public static final ConfigOption<String> SNAPSHOT_LOCKING_MODE =
+            ConfigOptions.key("debezium.snapshot.locking.mode")
+                    .stringType()
+                    .defaultValue("none")
+                    .withDescription(
+                            "Controls whether and for how long the connector holds a table lock. Table locks prevent certain types of changes table operations from occurring while the connector performs a snapshot. ");
+
+    @Experimental
+    public static final ConfigOption<String> HISTORY_CAPTURED_TABLES_DDL_ENABLE =
+            ConfigOptions.key("debezium.database.history.store.only.captured.tables.ddl")
+                    .stringType()
+                    .defaultValue("true")
+                    .withDescription(
+                            "Used to specify whether the connector records schema structures from the schema or all tables in the database, or only from the tables specified for capture. ");
+
+    public static final ConfigOption<Boolean> SCAN_INCREMENTAL_SNAPSHOT_ENABLED =
+            ConfigOptions.key("scan.incremental.snapshot.enabled")
+                    .booleanType()
+                    .defaultValue(true)
+                    .withDescription(
+                            "Incremental snapshot is a new mechanism to read snapshot of a table. "
+                                    + "Compared to the old snapshot mechanism, the incremental snapshot has many advantages, including:\n"
+                                    + "(1) source can be parallel during snapshot reading, \n"
+                                    + "(2) source can perform checkpoints in the chunk granularity during snapshot reading, \n"
+                                    + "(3) source doesn't need to acquire global read lock (FLUSH TABLES WITH READ LOCK) before snapshot reading.\n"
+                                    + "For MySQL, if you would like the source run in parallel, each parallel reader should have an unique server id, "
+                                    + "so the 'server-id' must be a range like '5400-6400', and the range must be larger than the parallelism.");
+
+    public static final ConfigOption<Double> SPLIT_KEY_EVEN_DISTRIBUTION_FACTOR_UPPER_BOUND =
+            ConfigOptions.key("chunk-key.even-distribution.factor.upper-bound")
+                    .doubleType()
+                    .defaultValue(1000.0d)
+                    .withFallbackKeys("split-key.even-distribution.factor.upper-bound")
+                    .withDescription(
+                            "The upper bound of chunk key distribution factor. The distribution factor is used to determine whether the"
+                                    + " table is evenly distribution or not."
+                                    + " The table chunks would use evenly calculation optimization when the data distribution is even,"
+                                    + " and the query for splitting would happen when it is uneven."
+                                    + " The distribution factor could be calculated by (MAX(id) - MIN(id) + 1) / rowCount.");
+
+    public static final ConfigOption<Double> SPLIT_KEY_EVEN_DISTRIBUTION_FACTOR_LOWER_BOUND =
+            ConfigOptions.key("chunk-key.even-distribution.factor.lower-bound")
+                    .doubleType()
+                    .defaultValue(0.05d)
+                    .withFallbackKeys("split-key.even-distribution.factor.lower-bound")
+                    .withDescription(
+                            "The lower bound of chunk key distribution factor. The distribution factor is used to determine whether the"
+                                    + " table is evenly distribution or not."
+                                    + " The table chunks would use evenly calculation optimization when the data distribution is even,"
+                                    + " and the query for splitting would happen when it is uneven."
+                                    + " The distribution factor could be calculated by (MAX(id) - MIN(id) + 1) / rowCount.");
+
+    @Experimental
+    public static final ConfigOption<Boolean> SCAN_INCREMENTAL_SNAPSHOT_BACKFILL_SKIP =
+            ConfigOptions.key("scan.incremental.snapshot.backfill.skip")
+                    .booleanType()
+                    .defaultValue(false)
+                    .withDescription(
+                            "Whether to skip backfill in snapshot reading phase. If backfill is skipped, changes on captured tables during snapshot phase will be consumed later in binlog reading phase instead of being merged into the snapshot.WARNING: Skipping backfill might lead to data inconsistency because some binlog events happened within the snapshot phase might be replayed (only at-least-once semantic is promised). For example updating an already updated value in snapshot, or deleting an already deleted entry in snapshot. These replayed binlog events should be handled specially.");
+
+    public static Map<String, String> getPropertiesByPrefix(
+            Configuration tableOptions, String prefix) {
+        final Map<String, String> props = new HashMap<>();
+        for (Map.Entry<String, String> entry : tableOptions.toMap().entrySet()) {
+            if (entry.getKey().startsWith(prefix)) {
+                String subKey = entry.getKey().substring(prefix.length());
+                props.put(subKey, entry.getValue());
+            }
+        }
+        return props;
+    }
 }

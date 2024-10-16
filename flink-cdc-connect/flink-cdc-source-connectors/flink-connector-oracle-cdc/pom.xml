@@ -54,7 +54,7 @@ under the License.
         <dependency>
             <groupId>io.debezium</groupId>
             <artifactId>debezium-connector-oracle</artifactId>
-            <version>${debezium.version}</version>
+            <version>1.9.0-RELEASE</version>
         </dependency>
 
         <!-- test dependencies on Debezium -->

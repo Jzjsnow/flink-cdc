@@ -14,16 +14,16 @@
  * limitations under the License.
  */
 
-package com.ververica.cdc.connectors.pgsql.source.reader;
+package com.ververica.cdc.connectors.oracle.source.reader;
 
 import org.apache.flink.api.connector.source.SourceReaderContext;
 
 import com.ververica.cdc.connectors.base.config.JdbcSourceConfig;
 import com.ververica.cdc.connectors.base.source.reader.IncrementalSourceReader;
-import com.ververica.cdc.connectors.postgres.source.PostgresDialect;
-import com.ververica.cdc.connectors.postgres.source.PostgresSourceBuilder;
-import com.ververica.cdc.connectors.postgres.source.config.PostgresSourceConfigFactory;
-import com.ververica.cdc.connectors.postgres.source.offset.PostgresOffsetFactory;
+import com.ververica.cdc.connectors.oracle.source.OracleDialect;
+import com.ververica.cdc.connectors.oracle.source.OracleSourceBuilder;
+import com.ververica.cdc.connectors.oracle.source.config.OracleSourceConfigFactory;
+import com.ververica.cdc.connectors.oracle.source.meta.offset.RedoLogOffsetFactory;
 import com.ververica.cdc.debezium.DebeziumDeserializationSchema;
 
 /**
@@ -31,14 +31,13 @@ import com.ververica.cdc.debezium.DebeziumDeserializationSchema;
  * and Watermark Signal Algorithm which supports parallel reading snapshot of table and then
  * continue to capture data change by streaming reading.
  */
-public class PostgreSQLTableSourceReader<T>
-        extends PostgresSourceBuilder.PostgresIncrementalSource<T> {
+public class OracleTableSourceReader<T> extends OracleSourceBuilder.OracleIncrementalSource<T> {
 
-    public PostgreSQLTableSourceReader(
-            PostgresSourceConfigFactory configFactory,
+    public OracleTableSourceReader(
+            OracleSourceConfigFactory configFactory,
             DebeziumDeserializationSchema<T> deserializationSchema,
-            PostgresOffsetFactory offsetFactory,
-            PostgresDialect dataSourceDialect) {
+            RedoLogOffsetFactory offsetFactory,
+            OracleDialect dataSourceDialect) {
         super(configFactory, deserializationSchema, offsetFactory, dataSourceDialect);
     }
 
