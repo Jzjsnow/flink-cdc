@@ -23,6 +23,7 @@ import com.ververica.cdc.debezium.Validator;
 import io.debezium.connector.postgresql.PostgresConnector;
 
 import java.util.Properties;
+import java.util.UUID;
 
 import static org.apache.flink.util.Preconditions.checkNotNull;
 
@@ -172,6 +173,7 @@ public class PostgreSQLSourceReader {
             props.setProperty("database.port", String.valueOf(port));
             props.setProperty("slot.name", slotName);
             props.setProperty("slot.drop.on.stop", dropEnable);
+            props.setProperty("database.server.name", UUID.randomUUID().toString());
 
             // we have to enable heartbeat for PG to make sure DebeziumChangeConsumer#handleBatch
             // is invoked after job restart

@@ -47,6 +47,7 @@ import java.time.Duration;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+import java.util.Properties;
 import java.util.Random;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -75,6 +76,7 @@ import static com.ververica.cdc.connectors.pgsql.source.PostgresDataSourceOption
 import static com.ververica.cdc.connectors.pgsql.source.PostgresDataSourceOptions.SPLIT_KEY_EVEN_DISTRIBUTION_FACTOR_UPPER_BOUND;
 import static com.ververica.cdc.connectors.pgsql.source.PostgresDataSourceOptions.TABLE_NAME;
 import static com.ververica.cdc.connectors.pgsql.source.PostgresDataSourceOptions.USERNAME;
+import static com.ververica.cdc.connectors.pgsql.source.PostgresDataSourceOptions.getPropertiesByPrefix;
 
 /** A {@link DataSource} for PgSQL pipeline cdc connector. */
 @Internal
@@ -84,6 +86,7 @@ public class PostgresDataSource implements DataSource, SupportsReadingMetadata {
     private final Configuration config;
     private static final String SCAN_STARTUP_MODE_VALUE_INITIAL = "initial";
     private static final String SCAN_STARTUP_MODE_VALUE_LATEST = "latest-offset";
+    private static final String DEBEZIUM_PROPERTIES_PREFIX = "debezium.";
 
     /** Data type that describes the final output of the source. */
     protected DataType producedDataType;
@@ -145,6 +148,10 @@ public class PostgresDataSource implements DataSource, SupportsReadingMetadata {
                         config.get(PostgresDataSourceOptions.SCHEMA_CHANGE_ENABLED),
                         sourceConfig.getServerTimeZone());
         PostgresOffsetFactory offsetFactory = new PostgresOffsetFactory();
+        Properties properties = new Properties();
+        Map configMap = getPropertiesByPrefix(config, DEBEZIUM_PROPERTIES_PREFIX);
+        configMap.keySet().stream()
+                .forEach(e -> properties.setProperty(e.toString(), configMap.get(e).toString()));
         if (enableParallelRead) {
             JdbcIncrementalSource<Event> parallelSource =
                     PostgreSQLTableSourceReader.<Event>builder()
@@ -173,6 +180,9 @@ public class PostgresDataSource implements DataSource, SupportsReadingMetadata {
                             .heartbeatInterval(heartbeatInterval)
                             .closeIdleReaders(closeIdlerReaders)
                             .skipSnapshotBackfill(skipSnapshotBackfill)
+                            .includeSchemaChanges(
+                                    config.get(PostgresDataSourceOptions.SCHEMA_CHANGE_ENABLED))
+                            .debeziumProperties(properties)
                             .build();
             return FlinkSourceProvider.of(parallelSource);
         } else {
@@ -191,6 +201,7 @@ public class PostgresDataSource implements DataSource, SupportsReadingMetadata {
                             .sourceConfig(sourceConfig)
                             .dropSoltEnable(config.get(PostgresDataSourceOptions.SLOT_DROP_ENABLED))
                             .heartbeatMs(config.get(PostgresDataSourceOptions.DEFAULT_HEARTBEAT_MS))
+                            .debeziumProperties(properties)
                             .build();
             return FlinkSourceFunctionProvider.of(sourceFunction);
         }

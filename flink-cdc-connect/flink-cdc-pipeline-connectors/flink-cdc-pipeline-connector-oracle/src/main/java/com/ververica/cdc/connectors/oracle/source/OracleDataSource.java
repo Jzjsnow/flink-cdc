@@ -59,6 +59,7 @@ public class OracleDataSource implements DataSource, SupportsReadingMetadata {
 
     private static final String SCAN_STARTUP_MODE_VALUE_INITIAL = "initial";
     private static final String SCAN_STARTUP_MODE_VALUE_LATEST = "latest-offset";
+    private static final String DEBEZIUM_PROPERTIES_PREFIX = "debezium.";
     private final OracleSourceConfig sourceConfig;
     private final Configuration config;
 
@@ -100,7 +101,7 @@ public class OracleDataSource implements DataSource, SupportsReadingMetadata {
                 "database.history.store.only.captured.tables.ddl",
                 config.get(OracleDataSourceOptions.HISTORY_CAPTURED_TABLES_DDL_ENABLE));
         Map<String, String> map =
-                OracleDataSourceOptions.getPropertiesByPrefix(config, "debezium.");
+                OracleDataSourceOptions.getPropertiesByPrefix(config, DEBEZIUM_PROPERTIES_PREFIX);
         map.keySet().stream().forEach(e -> dbzProperties.put(e, map.get(e)));
         StartupOptions startupOptions = getStartupOptions(config);
         boolean enableParallelRead =

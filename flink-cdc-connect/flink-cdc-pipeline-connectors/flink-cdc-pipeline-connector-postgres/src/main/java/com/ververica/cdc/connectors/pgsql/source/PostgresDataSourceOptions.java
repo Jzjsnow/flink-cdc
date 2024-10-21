@@ -20,11 +20,14 @@ import com.ververica.cdc.common.annotation.Experimental;
 import com.ververica.cdc.common.annotation.PublicEvolving;
 import com.ververica.cdc.common.configuration.ConfigOption;
 import com.ververica.cdc.common.configuration.ConfigOptions;
+import com.ververica.cdc.common.configuration.Configuration;
 import com.ververica.cdc.connectors.base.options.SourceOptions;
 import com.ververica.cdc.connectors.base.source.IncrementalSource;
 import com.ververica.cdc.debezium.table.DebeziumChangelogMode;
 
 import java.time.Duration;
+import java.util.HashMap;
+import java.util.Map;
 
 /** Configurations for {@link IncrementalSource} of JDBC data source. */
 @PublicEvolving
@@ -269,4 +272,16 @@ public class PostgresDataSourceOptions extends SourceOptions {
                     .defaultValue("300000")
                     .withDescription(
                             "Heartbeat messages are useful for monitoring whether the connector is receiving change events from the database. Heartbeat messages might help decrease the number of change events that need to be re-sent when a connector restarts. To send heartbeat messages, set this property to a positive integer, which indicates the number of milliseconds between heartbeat messages..");
+
+    public static Map<String, String> getPropertiesByPrefix(
+            Configuration tableOptions, String prefix) {
+        final Map<String, String> props = new HashMap<>();
+        for (Map.Entry<String, String> entry : tableOptions.toMap().entrySet()) {
+            if (entry.getKey().startsWith(prefix)) {
+                String subKey = entry.getKey().substring(prefix.length());
+                props.put(subKey, entry.getValue());
+            }
+        }
+        return props;
+    }
 }
