@@ -17,6 +17,9 @@
 package com.ververica.cdc.runtime.operators.schema.coordinator;
 
 import org.apache.flink.api.java.tuple.Tuple2;
+import org.apache.flink.core.memory.DataInputViewStreamWrapper;
+import org.apache.flink.core.memory.DataOutputViewStreamWrapper;
+
 import com.ververica.cdc.common.event.AddColumnEvent;
 import com.ververica.cdc.common.event.AlterColumnTypeEvent;
 import com.ververica.cdc.common.event.CreateTableEvent;
@@ -33,8 +36,6 @@ import com.ververica.cdc.common.types.DataTypeFamily;
 import com.ververica.cdc.common.types.DataTypes;
 import com.ververica.cdc.common.utils.ChangeEventUtils;
 import com.ververica.cdc.runtime.serializer.TableIdSerializer;
-import org.apache.flink.core.memory.DataInputViewStreamWrapper;
-import org.apache.flink.core.memory.DataOutputViewStreamWrapper;
 
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
@@ -82,12 +83,11 @@ public class SchemaDerivation {
                 // 1-to-1 mapping. Replace the table ID directly
                 SchemaChangeEvent derivedSchemaChangeEvent =
                         ChangeEventUtils.recreateSchemaChangeEvent(schemaChangeEvent, derivedTable);
-                schemaManager.applySchemaChange(derivedSchemaChangeEvent);
                 return Collections.singletonList(derivedSchemaChangeEvent);
             }
 
             // Many-to-1 mapping (merging tables)
-            Schema derivedTableSchema = schemaManager.getLatestSchema(derivedTable).get();
+            Schema derivedTableSchema = schemaManager.getLatestEvolvedSchema(derivedTable).get();
             if (schemaChangeEvent instanceof CreateTableEvent) {
                 return handleCreateTableEvent(
                         (CreateTableEvent) schemaChangeEvent, derivedTableSchema, derivedTable);
@@ -181,7 +181,6 @@ public class SchemaDerivation {
             AddColumnEvent derivedSchemaChangeEvent = new AddColumnEvent(derivedTable, newColumns);
             schemaChangeEvents.add(derivedSchemaChangeEvent);
         }
-        schemaChangeEvents.forEach(schemaManager::applySchemaChange);
         return schemaChangeEvents;
     }
 
@@ -213,7 +212,6 @@ public class SchemaDerivation {
                     new AlterColumnTypeEvent(derivedTable, typeDifference);
             schemaChangeEvents.add(derivedSchemaChangeEvent);
         }
-        schemaChangeEvents.forEach(schemaManager::applySchemaChange);
         return schemaChangeEvents;
     }
 
@@ -252,7 +250,6 @@ public class SchemaDerivation {
         if (!newTypeMapping.isEmpty()) {
             schemaChangeEvents.add(new AlterColumnTypeEvent(derivedTable, newTypeMapping));
         }
-        schemaChangeEvents.forEach(schemaManager::applySchemaChange);
         return schemaChangeEvents;
     }
 
@@ -288,7 +285,6 @@ public class SchemaDerivation {
         if (!newTypeMapping.isEmpty()) {
             schemaChangeEvents.add(new AlterColumnTypeEvent(derivedTable, newTypeMapping));
         }
-        schemaChangeEvents.forEach(schemaManager::applySchemaChange);
         return schemaChangeEvents;
     }
 

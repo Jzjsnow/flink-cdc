@@ -16,6 +16,9 @@
 
 package com.ververica.cdc.composer.flink;
 
+import org.apache.flink.runtime.testutils.MiniClusterResourceConfiguration;
+import org.apache.flink.test.junit5.MiniClusterExtension;
+
 import com.ververica.cdc.common.configuration.Configuration;
 import com.ververica.cdc.common.data.binary.BinaryStringData;
 import com.ververica.cdc.common.event.AddColumnEvent;
@@ -40,8 +43,6 @@ import com.ververica.cdc.connectors.values.sink.ValuesDataSinkOptions;
 import com.ververica.cdc.connectors.values.source.ValuesDataSourceHelper;
 import com.ververica.cdc.connectors.values.source.ValuesDataSourceOptions;
 import com.ververica.cdc.runtime.typeutils.BinaryRecordDataGenerator;
-import org.apache.flink.runtime.testutils.MiniClusterResourceConfiguration;
-import org.apache.flink.test.junit5.MiniClusterExtension;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -410,30 +411,30 @@ class FlinkPipelineComposerITCase {
                         myTable2,
                         table2dataGenerator.generate(
                                 new Object[] {
-                                        3L,
-                                        BinaryStringData.fromString("Charlie"),
-                                        (byte) 15,
-                                        BinaryStringData.fromString("student")
+                                    3L,
+                                    BinaryStringData.fromString("Charlie"),
+                                    (byte) 15,
+                                    BinaryStringData.fromString("student")
                                 })));
         events.add(
                 DataChangeEvent.insertEvent(
                         myTable2,
                         table2dataGenerator.generate(
                                 new Object[] {
-                                        4L,
-                                        BinaryStringData.fromString("Donald"),
-                                        (byte) 25,
-                                        BinaryStringData.fromString("student")
+                                    4L,
+                                    BinaryStringData.fromString("Donald"),
+                                    (byte) 25,
+                                    BinaryStringData.fromString("student")
                                 })));
         events.add(
                 DataChangeEvent.deleteEvent(
                         myTable2,
                         table2dataGenerator.generate(
                                 new Object[] {
-                                        4L,
-                                        BinaryStringData.fromString("Donald"),
-                                        (byte) 25,
-                                        BinaryStringData.fromString("student")
+                                    4L,
+                                    BinaryStringData.fromString("Donald"),
+                                    (byte) 25,
+                                    BinaryStringData.fromString("student")
                                 })));
         events.add(new RenameColumnEvent(myTable1, ImmutableMap.of("name", "last_name")));
         events.add(
@@ -451,20 +452,20 @@ class FlinkPipelineComposerITCase {
                 DataChangeEvent.insertEvent(
                         myTable2,
                         new BinaryRecordDataGenerator(
-                                new DataType[] {
-                                        DataTypes.BIGINT(),
-                                        DataTypes.VARCHAR(255),
-                                        DataTypes.TINYINT(),
-                                        DataTypes.STRING(),
-                                        DataTypes.STRING()
-                                })
+                                        new DataType[] {
+                                            DataTypes.BIGINT(),
+                                            DataTypes.VARCHAR(255),
+                                            DataTypes.TINYINT(),
+                                            DataTypes.STRING(),
+                                            DataTypes.STRING()
+                                        })
                                 .generate(
                                         new Object[] {
-                                                6L,
-                                                BinaryStringData.fromString("Frank"),
-                                                (byte) 30,
-                                                BinaryStringData.fromString("student"),
-                                                BinaryStringData.fromString("male")
+                                            6L,
+                                            BinaryStringData.fromString("Frank"),
+                                            (byte) 30,
+                                            BinaryStringData.fromString("student"),
+                                            BinaryStringData.fromString("male")
                                         })));
 
         ValuesDataSourceHelper.setSourceEvents(Collections.singletonList(events));

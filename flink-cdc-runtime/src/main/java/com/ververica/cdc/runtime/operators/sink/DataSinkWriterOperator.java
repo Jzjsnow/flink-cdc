@@ -184,7 +184,7 @@ public class DataSinkWriterOperator<CommT> extends AbstractStreamOperator<Commit
     }
 
     public void emitLatestSchema(TableId tableId) throws Exception {
-        Optional<Schema> schema = schemaEvolutionClient.getLatestSchema(tableId);
+        Optional<Schema> schema = schemaEvolutionClient.getLatestEvolvedSchema(tableId);
         if (schema.isPresent()) {
             // request and process CreateTableEvent because SinkWriter need to retrieve
             // Schema to deserialize RecordData after resuming job.

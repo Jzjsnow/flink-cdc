@@ -16,7 +16,6 @@
 
 package com.ververica.cdc.runtime.operators.schema.coordinator;
 
-import com.ververica.cdc.common.schema.Selectors;
 import org.apache.flink.api.java.tuple.Tuple2;
 import org.apache.flink.runtime.operators.coordination.CoordinationRequest;
 import org.apache.flink.runtime.operators.coordination.CoordinationRequestHandler;
@@ -25,13 +24,18 @@ import org.apache.flink.runtime.operators.coordination.OperatorCoordinator;
 import org.apache.flink.runtime.operators.coordination.OperatorEvent;
 import org.apache.flink.util.FlinkException;
 
+import com.ververica.cdc.common.annotation.VisibleForTesting;
+import com.ververica.cdc.common.event.SchemaChangeEvent;
 import com.ververica.cdc.common.event.TableId;
 import com.ververica.cdc.common.pipeline.SchemaChangeBehavior;
+import com.ververica.cdc.common.schema.Selectors;
 import com.ververica.cdc.common.sink.MetadataApplier;
 import com.ververica.cdc.runtime.operators.schema.SchemaOperator;
 import com.ververica.cdc.runtime.operators.schema.event.FlushSuccessEvent;
-import com.ververica.cdc.runtime.operators.schema.event.GetSchemaRequest;
-import com.ververica.cdc.runtime.operators.schema.event.GetSchemaResponse;
+import com.ververica.cdc.runtime.operators.schema.event.GetEvolvedSchemaRequest;
+import com.ververica.cdc.runtime.operators.schema.event.GetEvolvedSchemaResponse;
+import com.ververica.cdc.runtime.operators.schema.event.GetOriginalSchemaRequest;
+import com.ververica.cdc.runtime.operators.schema.event.GetOriginalSchemaResponse;
 import com.ververica.cdc.runtime.operators.schema.event.SchemaChangeRequest;
 import com.ververica.cdc.runtime.operators.schema.event.SchemaChangeResultRequest;
 import com.ververica.cdc.runtime.operators.schema.event.SinkWriterRegisterEvent;
@@ -44,6 +48,7 @@ import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
+import java.io.IOException;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -108,16 +113,7 @@ public class SchemaRegistry implements OperatorCoordinator, CoordinationRequestH
             OperatorCoordinator.Context context,
             MetadataApplier metadataApplier,
             List<Tuple2<Selectors, TableId>> routes) {
-        this.context = context;
-        this.operatorName = operatorName;
-        this.failedReasons = new HashMap<>();
-        this.metadataApplier = metadataApplier;
-        this.routes = routes;
-        schemaManager = new SchemaManager();
-        schemaDerivation = new SchemaDerivation(schemaManager, routes, new HashMap<>());
-        requestHandler =
-                new SchemaRegistryRequestHandler(
-                        metadataApplier, schemaManager, SchemaChangeBehavior.EVOLVE,schemaDerivation);
+        this(operatorName, context, metadataApplier, SchemaChangeBehavior.EVOLVE, routes);
     }
 
     public SchemaRegistry(
@@ -131,7 +127,7 @@ public class SchemaRegistry implements OperatorCoordinator, CoordinationRequestH
         this.failedReasons = new HashMap<>();
         this.metadataApplier = metadataApplier;
         this.routes = routes;
-        this.schemaManager = new SchemaManager();
+        this.schemaManager = new SchemaManager(schemaChangeBehavior);
         schemaDerivation = new SchemaDerivation(schemaManager, routes, new HashMap<>());
         this.requestHandler =
                 new SchemaRegistryRequestHandler(
@@ -151,25 +147,31 @@ public class SchemaRegistry implements OperatorCoordinator, CoordinationRequestH
     @Override
     public void close() throws Exception {
         LOG.info("SchemaRegistry for {} closed.", operatorName);
+        requestHandler.close();
     }
 
     @Override
     public void handleEventFromOperator(int subtask, int attemptNumber, OperatorEvent event)
             throws Exception {
-        if (event instanceof FlushSuccessEvent) {
-            FlushSuccessEvent flushSuccessEvent = (FlushSuccessEvent) event;
-            LOG.info(
-                    "Sink subtask {} succeed flushing for table {}.",
-                    flushSuccessEvent.getSubtask(),
-                    flushSuccessEvent.getTableId().toString());
-            requestHandler.flushSuccess(
-                    flushSuccessEvent.getTableId(),
-                    flushSuccessEvent.getSubtask(),
-                    currentParallelism);
-        } else if (event instanceof SinkWriterRegisterEvent) {
-            requestHandler.registerSinkWriter(((SinkWriterRegisterEvent) event).getSubtask());
-        } else {
-            throw new FlinkException("Unrecognized Operator Event: " + event);
+        try {
+            if (event instanceof FlushSuccessEvent) {
+                FlushSuccessEvent flushSuccessEvent = (FlushSuccessEvent) event;
+                LOG.info(
+                        "Sink subtask {} succeed flushing for table {}.",
+                        flushSuccessEvent.getSubtask(),
+                        flushSuccessEvent.getTableId().toString());
+                requestHandler.flushSuccess(
+                        flushSuccessEvent.getTableId(),
+                        flushSuccessEvent.getSubtask(),
+                        currentParallelism);
+            } else if (event instanceof SinkWriterRegisterEvent) {
+                requestHandler.registerSinkWriter(((SinkWriterRegisterEvent) event).getSubtask());
+            } else {
+                throw new FlinkException("Unrecognized Operator Event: " + event);
+            }
+        } catch (Throwable t) {
+            context.failJob(t);
+            throw t;
         }
     }
 
@@ -187,6 +189,9 @@ public class SchemaRegistry implements OperatorCoordinator, CoordinationRequestH
             // Serialize SchemaDerivation mapping
             SchemaDerivation.serializeDerivationMapping(schemaDerivation, out);
             resultFuture.complete(baos.toByteArray());
+        } catch (Throwable t) {
+            context.failJob(t);
+            throw t;
         }
     }
 
@@ -204,9 +209,12 @@ public class SchemaRegistry implements OperatorCoordinator, CoordinationRequestH
                 return requestHandler.handleSchemaChangeRequest(schemaChangeRequest);
             } else if (request instanceof SchemaChangeResultRequest) {
                 return requestHandler.getSchemaChangeResult();
-            } else if (request instanceof GetSchemaRequest) {
+            } else if (request instanceof GetEvolvedSchemaRequest) {
                 return CompletableFuture.completedFuture(
-                        wrap(handleGetSchemaRequest(((GetSchemaRequest) request))));
+                        wrap(handleGetEvolvedSchemaRequest(((GetEvolvedSchemaRequest) request))));
+            } else if (request instanceof GetOriginalSchemaRequest) {
+                return CompletableFuture.completedFuture(
+                        wrap(handleGetOriginalSchemaRequest((GetOriginalSchemaRequest) request)));
             } else {
                 throw new IllegalArgumentException(
                         "Unrecognized CoordinationRequest type: " + request);
@@ -226,18 +234,54 @@ public class SchemaRegistry implements OperatorCoordinator, CoordinationRequestH
         try (ByteArrayInputStream bais = new ByteArrayInputStream(checkpointData);
                 DataInputStream in = new DataInputStream(bais)) {
             int schemaManagerSerializerVersion = in.readInt();
-            int length = in.readInt();
-            byte[] serializedSchemaManager = new byte[length];
-            in.readFully(serializedSchemaManager);
-            schemaManager =
-                    SchemaManager.SERIALIZER.deserialize(
-                            schemaManagerSerializerVersion, serializedSchemaManager);
-            Map<TableId, Set<TableId>> derivationMapping =
-                    SchemaDerivation.deserializerDerivationMapping(in);
-            schemaDerivation = new SchemaDerivation(schemaManager, routes, derivationMapping);
-            requestHandler =
-                    new SchemaRegistryRequestHandler(
-                            metadataApplier, schemaManager, schemaChangeBehavior, schemaDerivation);
+
+            switch (schemaManagerSerializerVersion) {
+                case 0:
+                    {
+                        int length = in.readInt();
+                        byte[] serializedSchemaManager = new byte[length];
+                        in.readFully(serializedSchemaManager);
+                        schemaManager =
+                                SchemaManager.SERIALIZER.deserialize(
+                                        schemaManagerSerializerVersion,
+                                        serializedSchemaManager,
+                                        routes);
+                        schemaDerivation =
+                                new SchemaDerivation(schemaManager, routes, new HashMap<>());
+
+                        requestHandler =
+                                new SchemaRegistryRequestHandler(
+                                        metadataApplier,
+                                        schemaManager,
+                                        schemaManager.getBehavior(),
+                                        schemaDerivation);
+                        break;
+                    }
+                case 1:
+                case 2:
+                    {
+                        int length = in.readInt();
+                        byte[] serializedSchemaManager = new byte[length];
+                        in.readFully(serializedSchemaManager);
+                        schemaManager =
+                                SchemaManager.SERIALIZER.deserialize(
+                                        schemaManagerSerializerVersion, serializedSchemaManager);
+                        Map<TableId, Set<TableId>> derivationMapping =
+                                SchemaDerivation.deserializerDerivationMapping(in);
+                        schemaDerivation =
+                                new SchemaDerivation(schemaManager, routes, derivationMapping);
+                        requestHandler =
+                                new SchemaRegistryRequestHandler(
+                                        metadataApplier,
+                                        schemaManager,
+                                        schemaChangeBehavior,
+                                        schemaDerivation);
+                        break;
+                    }
+                default:
+                    throw new IOException(
+                            "Unrecognized serialization version " + schemaManagerSerializerVersion);
+            }
         }
     }
 
@@ -261,22 +305,59 @@ public class SchemaRegistry implements OperatorCoordinator, CoordinationRequestH
         // do nothing
     }
 
-    private GetSchemaResponse handleGetSchemaRequest(GetSchemaRequest getSchemaRequest) {
-        LOG.info("Handling schema request: {}", getSchemaRequest);
-        int schemaVersion = getSchemaRequest.getSchemaVersion();
-        TableId tableId = getSchemaRequest.getTableId();
-        if (schemaVersion == GetSchemaRequest.LATEST_SCHEMA_VERSION) {
-            return new GetSchemaResponse(schemaManager.getLatestSchema(tableId).orElse(null));
+    private GetEvolvedSchemaResponse handleGetEvolvedSchemaRequest(
+            GetEvolvedSchemaRequest getEvolvedSchemaRequest) {
+        LOG.info("Handling evolved schema request: {}", getEvolvedSchemaRequest);
+        int schemaVersion = getEvolvedSchemaRequest.getSchemaVersion();
+        TableId tableId = getEvolvedSchemaRequest.getTableId();
+        if (schemaVersion == GetEvolvedSchemaRequest.LATEST_SCHEMA_VERSION) {
+            return new GetEvolvedSchemaResponse(
+                    schemaManager.getLatestEvolvedSchema(tableId).orElse(null));
         } else {
             try {
-                return new GetSchemaResponse(schemaManager.getSchema(tableId, schemaVersion));
+                return new GetEvolvedSchemaResponse(
+                        schemaManager.getEvolvedSchema(tableId, schemaVersion));
             } catch (IllegalArgumentException iae) {
                 LOG.warn(
-                        "Some client is requesting an non-existed schema for table {} with version {}",
+                        "Some client is requesting an non-existed evolved schema for table {} with version {}",
                         tableId,
                         schemaVersion);
-                return new GetSchemaResponse(null);
+                return new GetEvolvedSchemaResponse(null);
             }
         }
+    }
+
+    private GetOriginalSchemaResponse handleGetOriginalSchemaRequest(
+            GetOriginalSchemaRequest getOriginalSchemaRequest) {
+        LOG.info("Handling original schema request: {}", getOriginalSchemaRequest);
+        int schemaVersion = getOriginalSchemaRequest.getSchemaVersion();
+        TableId tableId = getOriginalSchemaRequest.getTableId();
+        if (schemaVersion == GetOriginalSchemaRequest.LATEST_SCHEMA_VERSION) {
+            return new GetOriginalSchemaResponse(
+                    schemaManager.getLatestOriginalSchema(tableId).orElse(null));
+        } else {
+            try {
+                return new GetOriginalSchemaResponse(
+                        schemaManager.getOriginalSchema(tableId, schemaVersion));
+            } catch (IllegalArgumentException iae) {
+                LOG.warn(
+                        "Some client is requesting an non-existed original schema for table {} with version {}",
+                        tableId,
+                        schemaVersion);
+                return new GetOriginalSchemaResponse(null);
+            }
+        }
+    }
+
+    // --------------------Only visible for test -----------------
+
+    @VisibleForTesting
+    public void handleApplyOriginalSchemaChangeEvent(SchemaChangeEvent schemaChangeEvent) {
+        schemaManager.applyOriginalSchemaChange(schemaChangeEvent);
+    }
+
+    @VisibleForTesting
+    public void handleApplyEvolvedSchemaChangeRequest(SchemaChangeEvent schemaChangeEvent) {
+        schemaManager.applyEvolvedSchemaChange(schemaChangeEvent);
     }
 }

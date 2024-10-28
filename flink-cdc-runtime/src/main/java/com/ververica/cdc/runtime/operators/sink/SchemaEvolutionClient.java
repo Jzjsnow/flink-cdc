@@ -25,8 +25,10 @@ import com.ververica.cdc.common.schema.Schema;
 import com.ververica.cdc.runtime.operators.schema.SchemaOperator;
 import com.ververica.cdc.runtime.operators.schema.coordinator.SchemaRegistry;
 import com.ververica.cdc.runtime.operators.schema.event.FlushSuccessEvent;
-import com.ververica.cdc.runtime.operators.schema.event.GetSchemaRequest;
-import com.ververica.cdc.runtime.operators.schema.event.GetSchemaResponse;
+import com.ververica.cdc.runtime.operators.schema.event.GetEvolvedSchemaRequest;
+import com.ververica.cdc.runtime.operators.schema.event.GetEvolvedSchemaResponse;
+import com.ververica.cdc.runtime.operators.schema.event.GetOriginalSchemaRequest;
+import com.ververica.cdc.runtime.operators.schema.event.GetOriginalSchemaResponse;
 import com.ververica.cdc.runtime.operators.schema.event.SinkWriterRegisterEvent;
 
 import java.io.IOException;
@@ -63,15 +65,27 @@ public class SchemaEvolutionClient {
                 schemaOperatorID, new SerializedValue<>(new FlushSuccessEvent(subtask, tableId)));
     }
 
-    public Optional<Schema> getLatestSchema(TableId tableId) throws Exception {
-        GetSchemaResponse getSchemaResponse =
+    public Optional<Schema> getLatestEvolvedSchema(TableId tableId) throws Exception {
+        GetEvolvedSchemaResponse getEvolvedSchemaResponse =
                 unwrap(
                         toCoordinator
                                 .sendRequestToCoordinator(
                                         schemaOperatorID,
                                         new SerializedValue<>(
-                                                GetSchemaRequest.ofLatestSchema(tableId)))
+                                                GetEvolvedSchemaRequest.ofLatestSchema(tableId)))
                                 .get());
-        return getSchemaResponse.getSchema();
+        return getEvolvedSchemaResponse.getSchema();
+    }
+
+    public Optional<Schema> getLatestOriginalSchema(TableId tableId) throws Exception {
+        GetOriginalSchemaResponse getOriginalSchemaResponse =
+                unwrap(
+                        toCoordinator
+                                .sendRequestToCoordinator(
+                                        schemaOperatorID,
+                                        new SerializedValue<>(
+                                                GetOriginalSchemaRequest.ofLatestSchema(tableId)))
+                                .get());
+        return getOriginalSchemaResponse.getSchema();
     }
 }

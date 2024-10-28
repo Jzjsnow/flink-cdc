@@ -16,10 +16,10 @@
 
 package com.ververica.cdc.connectors.mysql.source.reader;
 
-import com.ververica.cdc.common.annotation.VisibleForTesting;
 import org.apache.flink.api.connector.source.SourceOutput;
 import org.apache.flink.connector.base.source.reader.RecordEmitter;
 
+import com.ververica.cdc.common.annotation.VisibleForTesting;
 import com.ververica.cdc.common.event.CreateTableEvent;
 import com.ververica.cdc.common.event.Event;
 import com.ververica.cdc.common.schema.Schema;
@@ -86,12 +86,9 @@ public class MySqlPipelineRecordEmitter extends MySqlRecordEmitter<Event> {
 
     @VisibleForTesting
     public MySqlPipelineRecordEmitter(MySqlSourceConfig sourceConfig) {
-        super(
-                null,
-                null,
-                sourceConfig.isIncludeSchemaChanges());
+        super(null, null, sourceConfig.isIncludeSchemaChanges());
         this.sourceConfig = sourceConfig;
-        this.createTableEventCache =null;
+        this.createTableEventCache = null;
     }
 
     @Override

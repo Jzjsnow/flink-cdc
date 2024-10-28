@@ -16,6 +16,10 @@
 
 package com.ververica.cdc.composer.flink;
 
+import org.apache.flink.configuration.DeploymentOptions;
+import org.apache.flink.streaming.api.datastream.DataStream;
+import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
+
 import com.ververica.cdc.common.annotation.Internal;
 import com.ververica.cdc.common.configuration.Configuration;
 import com.ververica.cdc.common.event.Event;
@@ -35,9 +39,6 @@ import com.ververica.cdc.composer.flink.translator.PartitioningTranslator;
 import com.ververica.cdc.composer.flink.translator.SchemaOperatorTranslator;
 import com.ververica.cdc.composer.utils.FactoryDiscoveryUtils;
 import com.ververica.cdc.runtime.serializer.event.EventSerializer;
-import org.apache.flink.configuration.DeploymentOptions;
-import org.apache.flink.streaming.api.datastream.DataStream;
-import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
 
 import java.net.URI;
 import java.net.URL;

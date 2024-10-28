@@ -16,7 +16,6 @@
 
 package com.ververica.cdc.runtime.operators.schema;
 
-import com.ververica.cdc.common.event.TableId;
 import org.apache.flink.api.java.tuple.Tuple2;
 import org.apache.flink.runtime.jobgraph.OperatorID;
 import org.apache.flink.runtime.operators.coordination.OperatorCoordinator;
@@ -26,6 +25,7 @@ import org.apache.flink.streaming.api.operators.SimpleOperatorFactory;
 
 import com.ververica.cdc.common.annotation.Internal;
 import com.ververica.cdc.common.event.Event;
+import com.ververica.cdc.common.event.TableId;
 import com.ververica.cdc.common.pipeline.SchemaChangeBehavior;
 import com.ververica.cdc.common.sink.MetadataApplier;
 import com.ververica.cdc.runtime.operators.schema.coordinator.SchemaRegistryProvider;
@@ -49,7 +49,7 @@ public class SchemaOperatorFactory extends SimpleOperatorFactory<Event>
             Duration rpcTimeOut,
             SchemaChangeBehavior schemaChangeBehavior,
             List<Tuple2<String, TableId>> routingRules) {
-        super(new SchemaOperator(rpcTimeOut, schemaChangeBehavior,routingRules));
+        super(new SchemaOperator(rpcTimeOut, schemaChangeBehavior, routingRules));
         this.metadataApplier = metadataApplier;
         this.schemaChangeBehavior = schemaChangeBehavior;
         this.routingRules = routingRules;

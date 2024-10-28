@@ -24,6 +24,7 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Set;
 import java.util.function.Predicate;
+import java.util.stream.Collectors;
 
 /** Selectors for filtering tables. */
 public class Selectors {
@@ -37,11 +38,18 @@ public class Selectors {
      * to be included.
      */
     private static class Selector {
+        private final String namespace;
         private final Predicate<String> namespacePred;
+        private final String schemaName;
         private final Predicate<String> schemaNamePred;
+        private final String tableName;
         private final Predicate<String> tableNamePred;
 
         public Selector(String namespace, String schemaName, String tableName) {
+            // The namespace/schemaName/tableName of the sources are lowercase
+            this.namespace = namespace == null ? null : namespace.toLowerCase();
+            this.schemaName = schemaName == null ? null : schemaName.toLowerCase();
+            this.tableName = tableName == null ? null : tableName.toLowerCase();
             this.namespacePred =
                     namespace == null ? (namespacePred) -> false : Predicates.includes(namespace);
             this.schemaNamePred =
@@ -68,6 +76,16 @@ public class Selectors {
                     && schemaNamePred.test(tableId.getSchemaName())
                     && tableNamePred.test(tableId.getTableName());
         }
+
+        public TableId getTableId() {
+            if (namespace == null || namespace.isEmpty()) {
+                if (schemaName == null || schemaName.isEmpty()) {
+                    return TableId.tableId(tableName);
+                }
+                return TableId.tableId(schemaName, tableName);
+            }
+            return TableId.tableId(namespace, schemaName, tableName);
+        }
     }
 
     /** Match the {@link TableId} against the {@link Selector}s. * */
@@ -78,6 +96,10 @@ public class Selectors {
             }
         }
         return false;
+    }
+
+    public List<TableId> getTableIds() {
+        return selectors.stream().map(Selector::getTableId).collect(Collectors.toList());
     }
 
     /** Builder for {@link Selectors}. */

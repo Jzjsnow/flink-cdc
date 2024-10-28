@@ -64,13 +64,17 @@ public class MySqlCreateTableEventTest {
 
         MySqlSourceConfig sourceConfig = configFactory.createConfig(0);
         MySqlPipelineRecordEmitter mySqlPipelineRecordEmitter =
-                new MySqlPipelineRecordEmitter( sourceConfig);
+                new MySqlPipelineRecordEmitter(sourceConfig);
         TableId tableId = new TableId(null, "test", "tablename");
         Method method = null;
         try {
-            method = mySqlPipelineRecordEmitter.getClass().getDeclaredMethod("parseDDL", String.class, TableId.class);
+            method =
+                    mySqlPipelineRecordEmitter
+                            .getClass()
+                            .getDeclaredMethod("parseDDL", String.class, TableId.class);
             method.setAccessible(true);
-            Schema schema = (Schema)method.invoke(mySqlPipelineRecordEmitter,createTableDdl, tableId);
+            Schema schema =
+                    (Schema) method.invoke(mySqlPipelineRecordEmitter, createTableDdl, tableId);
             List<String> list = new ArrayList<>();
             list.add("column1");
             list.add("acct_id");
@@ -78,6 +82,5 @@ public class MySqlCreateTableEventTest {
         } catch (Exception e) {
             throw new RuntimeException(e);
         }
-
     }
 }

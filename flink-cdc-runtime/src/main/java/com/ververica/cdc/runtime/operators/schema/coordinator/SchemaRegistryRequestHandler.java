@@ -16,6 +16,8 @@
 
 package com.ververica.cdc.runtime.operators.schema.coordinator;
 
+import org.apache.flink.runtime.operators.coordination.CoordinationResponse;
+
 import com.ververica.cdc.common.annotation.Internal;
 import com.ververica.cdc.common.event.SchemaChangeEvent;
 import com.ververica.cdc.common.event.SchemaChangeEventType;
@@ -27,7 +29,6 @@ import com.ververica.cdc.runtime.operators.schema.event.SchemaChangeProcessingRe
 import com.ververica.cdc.runtime.operators.schema.event.SchemaChangeRequest;
 import com.ververica.cdc.runtime.operators.schema.event.SchemaChangeResponse;
 import com.ververica.cdc.runtime.operators.schema.event.SchemaChangeResultResponse;
-import org.apache.flink.runtime.operators.coordination.CoordinationResponse;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -55,6 +56,7 @@ public class SchemaRegistryRequestHandler implements Closeable {
     private final Set<Integer> activeSinkWriters;
     /** Schema manager holding schema for all tables. */
     private final SchemaManager schemaManager;
+
     private final SchemaDerivation schemaDerivation;
 
     /**
@@ -117,6 +119,7 @@ public class SchemaRegistryRequestHandler implements Closeable {
                 try {
                     metadataApplier.applySchemaChange(changeEvent);
                     LOG.info("Applied schema change {} to table {}.", changeEvent, tableId);
+                    schemaManager.applyEvolvedSchemaChange(changeEvent);
                     currentFinishedSchemaChanges.add(changeEvent);
                 } catch (Throwable t) {
                     LOG.error(
@@ -166,7 +169,7 @@ public class SchemaRegistryRequestHandler implements Closeable {
                         request);
                 return CompletableFuture.completedFuture(wrap(SchemaChangeResponse.duplicate()));
             }
-            schemaManager.applySchemaChange(event);
+            schemaManager.applyOriginalSchemaChange(event);
             List<SchemaChangeEvent> derivedSchemaChangeEvents =
                     schemaDerivation.applySchemaChange(request.getSchemaChangeEvent());
 

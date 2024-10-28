@@ -16,6 +16,7 @@
 
 package com.ververica.cdc.runtime.operators.schema.coordinator;
 
+import org.apache.flink.api.java.tuple.Tuple2;
 import org.apache.flink.core.io.SimpleVersionedSerializer;
 import org.apache.flink.core.memory.DataInputViewStreamWrapper;
 import org.apache.flink.core.memory.DataOutputViewStreamWrapper;
@@ -28,8 +29,10 @@ import com.ververica.cdc.common.event.DropColumnEvent;
 import com.ververica.cdc.common.event.RenameColumnEvent;
 import com.ververica.cdc.common.event.SchemaChangeEvent;
 import com.ververica.cdc.common.event.TableId;
+import com.ververica.cdc.common.pipeline.SchemaChangeBehavior;
 import com.ververica.cdc.common.schema.Column;
 import com.ververica.cdc.common.schema.Schema;
+import com.ververica.cdc.common.schema.Selectors;
 import com.ververica.cdc.common.types.DataType;
 import com.ververica.cdc.common.utils.SchemaUtils;
 import com.ververica.cdc.runtime.serializer.TableIdSerializer;
@@ -54,27 +57,47 @@ import java.util.TreeMap;
 import static com.ververica.cdc.common.utils.Preconditions.checkArgument;
 
 /**
- * Schema manager handles handles schema changes for tables, and manages historical schema versions
- * of tables.
+ * Schema manager handles schema changes for tables, and manages historical schema versions of
+ * tables.
  */
 @Internal
 public class SchemaManager {
     private static final Logger LOG = LoggerFactory.getLogger(SchemaManager.class);
     private static final int INITIAL_SCHEMA_VERSION = 0;
     private static final int VERSIONS_TO_KEEP = 3;
-
+    private final SchemaChangeBehavior behavior;
     // Serializer for checkpointing
     public static final Serializer SERIALIZER = new Serializer();
 
     // Schema management
-    private final Map<TableId, SortedMap<Integer, Schema>> tableSchemas;
+    private final Map<TableId, SortedMap<Integer, Schema>> originalSchemas;
+
+    // Schema management
+    private final Map<TableId, SortedMap<Integer, Schema>> evolvedSchemas;
 
     public SchemaManager() {
-        tableSchemas = new HashMap<>();
+        evolvedSchemas = new HashMap<>();
+        originalSchemas = new HashMap<>();
+        behavior = SchemaChangeBehavior.EVOLVE;
     }
 
-    public SchemaManager(Map<TableId, SortedMap<Integer, Schema>> tableSchemas) {
-        this.tableSchemas = tableSchemas;
+    public SchemaManager(SchemaChangeBehavior behavior) {
+        evolvedSchemas = new HashMap<>();
+        originalSchemas = new HashMap<>();
+        this.behavior = behavior;
+    }
+
+    public SchemaManager(
+            Map<TableId, SortedMap<Integer, Schema>> originalSchemas,
+            Map<TableId, SortedMap<Integer, Schema>> evolvedSchemas,
+            SchemaChangeBehavior behavior) {
+        this.evolvedSchemas = evolvedSchemas;
+        this.originalSchemas = originalSchemas;
+        this.behavior = behavior;
+    }
+
+    public SchemaChangeBehavior getBehavior() {
+        return behavior;
     }
 
     /**
@@ -84,7 +107,7 @@ public class SchemaManager {
      */
     public final boolean isOriginalSchemaChangeEventRedundant(SchemaChangeEvent event) {
         TableId tableId = event.tableId();
-        Optional<Schema> latestSchema = getLatestSchema(tableId);
+        Optional<Schema> latestSchema = getLatestOriginalSchema(tableId);
 
         if (event instanceof AddColumnEvent) {
             AddColumnEvent addColumnEvent = (AddColumnEvent) event;
@@ -156,23 +179,53 @@ public class SchemaManager {
     }
 
     /** Check if schema exists for the specified table ID. */
-    public final boolean schemaExists(TableId tableId) {
-        return tableSchemas.containsKey(tableId) && !tableSchemas.get(tableId).isEmpty();
+    public final boolean schemaExists(
+            Map<TableId, SortedMap<Integer, Schema>> schemaMap, TableId tableId) {
+        return schemaMap.containsKey(tableId) && !schemaMap.get(tableId).isEmpty();
     }
 
-    /** Get the latest schema of the specified table. */
-    public Optional<Schema> getLatestSchema(TableId tableId) {
-        return getLatestSchemaVersion(tableId)
-                .map(version -> tableSchemas.get(tableId).get(version));
+    public final boolean originalSchemaExists(TableId tableId) {
+        return schemaExists(originalSchemas, tableId);
+    }
+
+    public final boolean evolvedSchemaExists(TableId tableId) {
+        return schemaExists(evolvedSchemas, tableId);
+    }
+
+    /** Get the latest evolved schema of the specified table. */
+    public Optional<Schema> getLatestEvolvedSchema(TableId tableId) {
+        return getLatestSchemaVersion(evolvedSchemas, tableId)
+                .map(version -> evolvedSchemas.get(tableId).get(version));
+    }
+
+    /** Get the latest original schema of the specified table. */
+    public Optional<Schema> getLatestOriginalSchema(TableId tableId) {
+        return getLatestSchemaVersion(originalSchemas, tableId)
+                .map(version -> originalSchemas.get(tableId).get(version));
     }
 
     /** Get schema at the specified version of a table. */
-    public Schema getSchema(TableId tableId, int version) {
+    public Schema getEvolvedSchema(TableId tableId, int version) {
         checkArgument(
-                tableSchemas.containsKey(tableId),
-                "Unable to find schema for table \"%s\"",
+                evolvedSchemas.containsKey(tableId),
+                "Unable to find evolved schema for table \"%s\"",
                 tableId);
-        SortedMap<Integer, Schema> versionedSchemas = tableSchemas.get(tableId);
+        SortedMap<Integer, Schema> versionedSchemas = evolvedSchemas.get(tableId);
+        checkArgument(
+                versionedSchemas.containsKey(version),
+                "Schema version %s does not exist for table \"%s\"",
+                version,
+                tableId);
+        return versionedSchemas.get(version);
+    }
+
+    /** Get schema at the specified version of a table. */
+    public Schema getOriginalSchema(TableId tableId, int version) {
+        checkArgument(
+                originalSchemas.containsKey(tableId),
+                "Unable to find original schema for table \"%s\"",
+                tableId);
+        SortedMap<Integer, Schema> versionedSchemas = originalSchemas.get(tableId);
         checkArgument(
                 versionedSchemas.containsKey(version),
                 "Schema version %s does not exist for table \"%s\"",
@@ -182,18 +235,38 @@ public class SchemaManager {
     }
 
     /** Apply schema change to a table. */
-    public void applySchemaChange(SchemaChangeEvent schemaChangeEvent) {
+    public void applyOriginalSchemaChange(SchemaChangeEvent schemaChangeEvent) {
         if (schemaChangeEvent instanceof CreateTableEvent) {
-            handleCreateTableEvent(((CreateTableEvent) schemaChangeEvent));
+            handleCreateTableEvent(originalSchemas, ((CreateTableEvent) schemaChangeEvent));
         } else {
-            Optional<Schema> optionalSchema = getLatestSchema(schemaChangeEvent.tableId());
+            Optional<Schema> optionalSchema = getLatestOriginalSchema(schemaChangeEvent.tableId());
             checkArgument(
                     optionalSchema.isPresent(),
                     "Unable to apply SchemaChangeEvent for table \"%s\" without existing schema",
                     schemaChangeEvent.tableId());
 
-            LOG.info("Handling schema change event: {}", schemaChangeEvent);
+            LOG.info("Handling original schema change event: {}", schemaChangeEvent);
             registerNewSchema(
+                    originalSchemas,
+                    schemaChangeEvent.tableId(),
+                    SchemaUtils.applySchemaChangeEvent(optionalSchema.get(), schemaChangeEvent));
+        }
+    }
+
+    /** Apply schema change to a table. */
+    public void applyEvolvedSchemaChange(SchemaChangeEvent schemaChangeEvent) {
+        if (schemaChangeEvent instanceof CreateTableEvent) {
+            handleCreateTableEvent(evolvedSchemas, ((CreateTableEvent) schemaChangeEvent));
+        } else {
+            Optional<Schema> optionalSchema = getLatestEvolvedSchema(schemaChangeEvent.tableId());
+            checkArgument(
+                    optionalSchema.isPresent(),
+                    "Unable to apply SchemaChangeEvent for table \"%s\" without existing schema",
+                    schemaChangeEvent.tableId());
+
+            LOG.info("Handling evolved schema change event: {}", schemaChangeEvent);
+            registerNewSchema(
+                    evolvedSchemas,
                     schemaChangeEvent.tableId(),
                     SchemaUtils.applySchemaChangeEvent(optionalSchema.get(), schemaChangeEvent));
         }
@@ -208,39 +281,45 @@ public class SchemaManager {
             return false;
         }
         SchemaManager that = (SchemaManager) o;
-        return Objects.equals(tableSchemas, that.tableSchemas);
+        return Objects.equals(originalSchemas, that.originalSchemas)
+                && Objects.equals(evolvedSchemas, that.evolvedSchemas);
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(tableSchemas);
+        return Objects.hash(originalSchemas, evolvedSchemas);
     }
 
     // -------------------------------- Helper functions -------------------------------------
 
-    private Optional<Integer> getLatestSchemaVersion(TableId tableId) {
-        if (!tableSchemas.containsKey(tableId)) {
+    private Optional<Integer> getLatestSchemaVersion(
+            final Map<TableId, SortedMap<Integer, Schema>> schemaMap, TableId tableId) {
+        if (!schemaMap.containsKey(tableId)) {
             return Optional.empty();
         }
         try {
-            return Optional.of(tableSchemas.get(tableId).lastKey());
+            return Optional.of(schemaMap.get(tableId).lastKey());
         } catch (NoSuchElementException e) {
             return Optional.empty();
         }
     }
 
-    private void handleCreateTableEvent(CreateTableEvent event) {
+    private void handleCreateTableEvent(
+            final Map<TableId, SortedMap<Integer, Schema>> schemaMap, CreateTableEvent event) {
         checkArgument(
-                !schemaExists(event.tableId()),
+                !schemaExists(schemaMap, event.tableId()),
                 "Unable to apply CreateTableEvent to an existing schema for table \"%s\"",
                 event.tableId());
         LOG.info("Handling schema change event: {}", event);
-        registerNewSchema(event.tableId(), event.getSchema());
+        registerNewSchema(schemaMap, event.tableId(), event.getSchema());
     }
 
-    private void registerNewSchema(TableId tableId, Schema newSchema) {
-        if (schemaExists(tableId)) {
-            SortedMap<Integer, Schema> versionedSchemas = tableSchemas.get(tableId);
+    private void registerNewSchema(
+            final Map<TableId, SortedMap<Integer, Schema>> schemaMap,
+            TableId tableId,
+            Schema newSchema) {
+        if (schemaExists(schemaMap, tableId)) {
+            SortedMap<Integer, Schema> versionedSchemas = schemaMap.get(tableId);
             Integer latestVersion = versionedSchemas.lastKey();
             versionedSchemas.put(latestVersion + 1, newSchema);
             if (versionedSchemas.size() > VERSIONS_TO_KEEP) {
@@ -249,7 +328,7 @@ public class SchemaManager {
         } else {
             TreeMap<Integer, Schema> versionedSchemas = new TreeMap<>();
             versionedSchemas.put(INITIAL_SCHEMA_VERSION, newSchema);
-            tableSchemas.putIfAbsent(tableId, versionedSchemas);
+            schemaMap.putIfAbsent(tableId, versionedSchemas);
         }
     }
 
@@ -260,7 +339,7 @@ public class SchemaManager {
          * Update history: from Version 3.0.0, set to 0, from version 3.1.1, updated to 1, from
          * version 3.2.0, updated to 2.
          */
-        public static final int CURRENT_VERSION = 0;
+        public static final int CURRENT_VERSION = 2;
 
         @Override
         public int getVersion() {
@@ -271,8 +350,9 @@ public class SchemaManager {
         public byte[] serialize(SchemaManager schemaManager) throws IOException {
             try (ByteArrayOutputStream baos = new ByteArrayOutputStream();
                     DataOutputStream out = new DataOutputStream(baos)) {
-                serializeSchemaMap(schemaManager.tableSchemas, out);
-
+                serializeSchemaMap(schemaManager.evolvedSchemas, out);
+                serializeSchemaMap(schemaManager.originalSchemas, out);
+                out.writeUTF(schemaManager.getBehavior().name());
                 return baos.toByteArray();
             }
         }
@@ -308,15 +388,78 @@ public class SchemaManager {
         public SchemaManager deserialize(int version, byte[] serialized) throws IOException {
             try (ByteArrayInputStream bais = new ByteArrayInputStream(serialized);
                     DataInputStream in = new DataInputStream(bais)) {
-
-                Map<TableId, SortedMap<Integer, Schema>> tableSchemas = deserializeSchemaMap(in);
-                // In legacy mode, original schema and evolved schema never differs
-                return new SchemaManager(tableSchemas);
+                switch (version) {
+                    case 0:
+                    case 1:
+                        {
+                            Map<TableId, SortedMap<Integer, Schema>> schemas =
+                                    deserializeSchemaMap(version, in);
+                            // In legacy mode, original schema and evolved schema never differs
+                            return new SchemaManager(schemas, schemas, SchemaChangeBehavior.EVOLVE);
+                        }
+                    case 2:
+                        {
+                            return deserializeSchemaManagerWithSchemaMaps(version, in);
+                        }
+                    default:
+                        throw new RuntimeException("Unknown serialize version: " + version);
+                }
             }
         }
 
+        public SchemaManager deserialize(
+                int version, byte[] serialized, List<Tuple2<Selectors, TableId>> routes)
+                throws IOException {
+            try (ByteArrayInputStream bais = new ByteArrayInputStream(serialized);
+                    DataInputStream in = new DataInputStream(bais)) {
+                switch (version) {
+                    case 0:
+                    case 1:
+                        {
+                            Map<TableId, SortedMap<Integer, Schema>> schemas =
+                                    deserializeSchemaMap(version, in);
+                            Map<TableId, SortedMap<Integer, Schema>> originalSchemas =
+                                    inferOriginalSchemasFromRoutes(routes, schemas);
+                            // In legacy mode, original schema and evolved schema never differs
+                            return new SchemaManager(
+                                    originalSchemas, schemas, SchemaChangeBehavior.EVOLVE);
+                        }
+                    case 2:
+                        {
+                            return deserializeSchemaManagerWithSchemaMaps(version, in);
+                        }
+                    default:
+                        throw new RuntimeException("Unknown serialize version: " + version);
+                }
+            }
+        }
+
+        private SchemaManager deserializeSchemaManagerWithSchemaMaps(
+                int version, DataInputStream in) throws IOException {
+            Map<TableId, SortedMap<Integer, Schema>> evolvedSchemas =
+                    deserializeSchemaMap(version, in);
+            Map<TableId, SortedMap<Integer, Schema>> originalSchemas =
+                    deserializeSchemaMap(version, in);
+            SchemaChangeBehavior behavior = SchemaChangeBehavior.valueOf(in.readUTF());
+            return new SchemaManager(originalSchemas, evolvedSchemas, behavior);
+        }
+
+        private static Map<TableId, SortedMap<Integer, Schema>> inferOriginalSchemasFromRoutes(
+                List<Tuple2<Selectors, TableId>> routes,
+                Map<TableId, SortedMap<Integer, Schema>> evolvedSchemas) {
+            Map<TableId, SortedMap<Integer, Schema>> tableSchemas = new HashMap<>();
+            for (Tuple2<Selectors, TableId> route : routes) {
+                List<TableId> originalTables = route.f0.getTableIds();
+                TableId routeTable = route.f1;
+                SortedMap<Integer, Schema> versionedSchemas = evolvedSchemas.get(routeTable);
+                originalTables.forEach(
+                        tableId -> tableSchemas.put(tableId, new TreeMap<>(versionedSchemas)));
+            }
+            return tableSchemas;
+        }
+
         private static Map<TableId, SortedMap<Integer, Schema>> deserializeSchemaMap(
-                DataInputStream in) throws IOException {
+                int version, DataInputStream in) throws IOException {
             TableIdSerializer tableIdSerializer = TableIdSerializer.INSTANCE;
             SchemaSerializer schemaSerializer = SchemaSerializer.INSTANCE;
             // Total schema length

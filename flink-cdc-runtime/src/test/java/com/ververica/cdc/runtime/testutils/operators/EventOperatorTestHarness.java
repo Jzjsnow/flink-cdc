@@ -30,18 +30,33 @@ import org.apache.flink.streaming.runtime.tasks.StreamTask;
 import org.apache.flink.streaming.runtime.watermarkstatus.WatermarkStatus;
 import org.apache.flink.streaming.util.MockStreamConfig;
 import org.apache.flink.util.OutputTag;
+import org.apache.flink.util.SerializedValue;
 
 import com.ververica.cdc.common.event.CreateTableEvent;
 import com.ververica.cdc.common.event.Event;
+import com.ververica.cdc.common.event.FlushEvent;
+import com.ververica.cdc.common.event.SchemaChangeEventType;
 import com.ververica.cdc.common.event.TableId;
+import com.ververica.cdc.common.pipeline.SchemaChangeBehavior;
 import com.ververica.cdc.common.schema.Schema;
 import com.ververica.cdc.runtime.operators.schema.coordinator.SchemaRegistry;
+import com.ververica.cdc.runtime.operators.schema.event.FlushSuccessEvent;
+import com.ververica.cdc.runtime.operators.schema.event.GetEvolvedSchemaRequest;
+import com.ververica.cdc.runtime.operators.schema.event.GetEvolvedSchemaResponse;
+import com.ververica.cdc.runtime.operators.schema.event.GetOriginalSchemaRequest;
+import com.ververica.cdc.runtime.operators.schema.event.GetOriginalSchemaResponse;
 import com.ververica.cdc.runtime.operators.schema.event.SchemaChangeRequest;
+import com.ververica.cdc.runtime.operators.schema.event.SinkWriterRegisterEvent;
 import com.ververica.cdc.runtime.testutils.schema.CollectingMetadataApplier;
 import com.ververica.cdc.runtime.testutils.schema.TestingSchemaRegistryGateway;
 
-import java.util.Collections;
+import java.io.IOException;
+import java.time.Duration;
+import java.util.ArrayList;
 import java.util.LinkedList;
+import java.util.Set;
+
+import static com.ververica.cdc.runtime.operators.schema.event.CoordinationResponseUtils.unwrap;
 
 /**
  * Harness for testing customized operators handling {@link Event}s in CDC pipeline.
@@ -59,6 +74,8 @@ public class EventOperatorTestHarness<OP extends AbstractStreamOperator<E>, E ex
         implements AutoCloseable {
     public static final OperatorID SCHEMA_OPERATOR_ID = new OperatorID(15213L, 15513L);
 
+    public static final OperatorID SINK_OPERATOR_ID = new OperatorID(15214L, 15514L);
+
     private final OP operator;
     private final int numOutputs;
     private final SchemaRegistry schemaRegistry;
@@ -66,6 +83,15 @@ public class EventOperatorTestHarness<OP extends AbstractStreamOperator<E>, E ex
     private final LinkedList<StreamRecord<E>> outputRecords = new LinkedList<>();
 
     public EventOperatorTestHarness(OP operator, int numOutputs) {
+        this(operator, numOutputs, null, SchemaChangeBehavior.EVOLVE);
+    }
+
+    public EventOperatorTestHarness(OP operator, int numOutputs, Duration duration) {
+        this(operator, numOutputs, duration, SchemaChangeBehavior.EVOLVE);
+    }
+
+    public EventOperatorTestHarness(
+            OP operator, int numOutputs, Duration duration, SchemaChangeBehavior behavior) {
         this.operator = operator;
         this.numOutputs = numOutputs;
         schemaRegistry =
@@ -73,8 +99,49 @@ public class EventOperatorTestHarness<OP extends AbstractStreamOperator<E>, E ex
                         "SchemaOperator",
                         new MockOperatorCoordinatorContext(
                                 SCHEMA_OPERATOR_ID, Thread.currentThread().getContextClassLoader()),
-                        new CollectingMetadataApplier(),
-                        Collections.emptyList());
+                        new CollectingMetadataApplier(duration),
+                        behavior,
+                        new ArrayList<>());
+        schemaRegistryGateway = new TestingSchemaRegistryGateway(schemaRegistry);
+    }
+
+    public EventOperatorTestHarness(
+            OP operator,
+            int numOutputs,
+            Duration duration,
+            SchemaChangeBehavior behavior,
+            Set<SchemaChangeEventType> enabledEventTypes) {
+        this.operator = operator;
+        this.numOutputs = numOutputs;
+        schemaRegistry =
+                new SchemaRegistry(
+                        "SchemaOperator",
+                        new MockOperatorCoordinatorContext(
+                                SCHEMA_OPERATOR_ID, Thread.currentThread().getContextClassLoader()),
+                        new CollectingMetadataApplier(duration, enabledEventTypes),
+                        behavior,
+                        new ArrayList<>());
+        schemaRegistryGateway = new TestingSchemaRegistryGateway(schemaRegistry);
+    }
+
+    public EventOperatorTestHarness(
+            OP operator,
+            int numOutputs,
+            Duration duration,
+            SchemaChangeBehavior behavior,
+            Set<SchemaChangeEventType> enabledEventTypes,
+            Set<SchemaChangeEventType> errorsOnEventTypes) {
+        this.operator = operator;
+        this.numOutputs = numOutputs;
+        schemaRegistry =
+                new SchemaRegistry(
+                        "SchemaOperator",
+                        new MockOperatorCoordinatorContext(
+                                SCHEMA_OPERATOR_ID, Thread.currentThread().getContextClassLoader()),
+                        new CollectingMetadataApplier(
+                                duration, enabledEventTypes, errorsOnEventTypes),
+                        behavior,
+                        new ArrayList<>());
         schemaRegistryGateway = new TestingSchemaRegistryGateway(schemaRegistry);
     }
 
@@ -87,6 +154,10 @@ public class EventOperatorTestHarness<OP extends AbstractStreamOperator<E>, E ex
         return outputRecords;
     }
 
+    public void clearOutputRecords() {
+        outputRecords.clear();
+    }
+
     public OP getOperator() {
         return operator;
     }
@@ -94,6 +165,35 @@ public class EventOperatorTestHarness<OP extends AbstractStreamOperator<E>, E ex
     public void registerTableSchema(TableId tableId, Schema schema) {
         schemaRegistry.handleCoordinationRequest(
                 new SchemaChangeRequest(tableId, new CreateTableEvent(tableId, schema)));
+        schemaRegistry.handleApplyEvolvedSchemaChangeRequest(new CreateTableEvent(tableId, schema));
+    }
+
+    public Schema getLatestOriginalSchema(TableId tableId) throws Exception {
+        return ((GetOriginalSchemaResponse)
+                        unwrap(
+                                schemaRegistry
+                                        .handleCoordinationRequest(
+                                                new GetOriginalSchemaRequest(
+                                                        tableId,
+                                                        GetOriginalSchemaRequest
+                                                                .LATEST_SCHEMA_VERSION))
+                                        .get()))
+                .getSchema()
+                .orElse(null);
+    }
+
+    public Schema getLatestEvolvedSchema(TableId tableId) throws Exception {
+        return ((GetEvolvedSchemaResponse)
+                        unwrap(
+                                schemaRegistry
+                                        .handleCoordinationRequest(
+                                                new GetEvolvedSchemaRequest(
+                                                        tableId,
+                                                        GetEvolvedSchemaRequest
+                                                                .LATEST_SCHEMA_VERSION))
+                                        .get()))
+                .getSchema()
+                .orElse(null);
     }
 
     @Override
@@ -107,7 +207,9 @@ public class EventOperatorTestHarness<OP extends AbstractStreamOperator<E>, E ex
         operator.setup(
                 new MockStreamTask(schemaRegistryGateway),
                 new MockStreamConfig(new Configuration(), numOutputs),
-                new EventCollectingOutput<>(outputRecords));
+                new EventCollectingOutput<>(outputRecords, schemaRegistryGateway));
+        schemaRegistryGateway.sendOperatorEventToCoordinator(
+                SINK_OPERATOR_ID, new SerializedValue<>(new SinkWriterRegisterEvent(0)));
     }
 
     // ---------------------------------------- Helper classes ---------------------------------
@@ -115,13 +217,29 @@ public class EventOperatorTestHarness<OP extends AbstractStreamOperator<E>, E ex
     private static class EventCollectingOutput<E extends Event> implements Output<StreamRecord<E>> {
         private final LinkedList<StreamRecord<E>> outputRecords;
 
-        public EventCollectingOutput(LinkedList<StreamRecord<E>> outputRecords) {
+        private final TestingSchemaRegistryGateway schemaRegistryGateway;
+
+        public EventCollectingOutput(
+                LinkedList<StreamRecord<E>> outputRecords,
+                TestingSchemaRegistryGateway schemaRegistryGateway) {
             this.outputRecords = outputRecords;
+            this.schemaRegistryGateway = schemaRegistryGateway;
         }
 
         @Override
         public void collect(StreamRecord<E> record) {
             outputRecords.add(record);
+            Event event = record.getValue();
+            if (event instanceof FlushEvent) {
+                try {
+                    schemaRegistryGateway.sendOperatorEventToCoordinator(
+                            SINK_OPERATOR_ID,
+                            new SerializedValue<>(
+                                    new FlushSuccessEvent(0, ((FlushEvent) event).getTableId())));
+                } catch (IOException e) {
+                    throw new RuntimeException(e);
+                }
+            }
         }
 
         @Override

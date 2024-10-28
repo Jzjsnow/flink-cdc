@@ -58,13 +58,15 @@ class SchemaManagerTest {
     @Test
     void testHandlingCreateTableEvent() {
         SchemaManager schemaManager = new SchemaManager();
-        schemaManager.applySchemaChange(new CreateTableEvent(CUSTOMERS, CUSTOMERS_SCHEMA));
-        assertThat(schemaManager.getLatestSchema(CUSTOMERS)).isPresent().contains(CUSTOMERS_SCHEMA);
+        schemaManager.applyEvolvedSchemaChange(new CreateTableEvent(CUSTOMERS, CUSTOMERS_SCHEMA));
+        assertThat(schemaManager.getLatestEvolvedSchema(CUSTOMERS))
+                .isPresent()
+                .contains(CUSTOMERS_SCHEMA);
 
         // Cannot apply CreateTableEvent multiple times
         assertThatThrownBy(
                         () ->
-                                schemaManager.applySchemaChange(
+                                schemaManager.applyEvolvedSchemaChange(
                                         new CreateTableEvent(CUSTOMERS, CUSTOMERS_SCHEMA)))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessage(
@@ -92,9 +94,9 @@ class SchemaManagerTest {
                                 AddColumnEvent.ColumnPosition.BEFORE,
                                 Column.physicalColumn("phone", DataTypes.BIGINT())));
 
-        schemaManager.applySchemaChange(new CreateTableEvent(CUSTOMERS, CUSTOMERS_SCHEMA));
-        schemaManager.applySchemaChange(new AddColumnEvent(CUSTOMERS, newColumns));
-        assertThat(schemaManager.getLatestSchema(CUSTOMERS))
+        schemaManager.applyEvolvedSchemaChange(new CreateTableEvent(CUSTOMERS, CUSTOMERS_SCHEMA));
+        schemaManager.applyEvolvedSchemaChange(new AddColumnEvent(CUSTOMERS, newColumns));
+        assertThat(schemaManager.getLatestEvolvedSchema(CUSTOMERS))
                 .contains(
                         Schema.newBuilder()
                                 .physicalColumn("append_first", DataTypes.BIGINT())
@@ -110,31 +112,51 @@ class SchemaManagerTest {
 
     @Test
     void testHandlingAlterColumnTypeEvent() {
-        SchemaManager schemaManager = new SchemaManager();
-        schemaManager.applySchemaChange(new CreateTableEvent(CUSTOMERS, CUSTOMERS_SCHEMA));
-        schemaManager.applySchemaChange(
-                new AlterColumnTypeEvent(CUSTOMERS, ImmutableMap.of("phone", DataTypes.STRING())));
-        assertThat(schemaManager.getLatestSchema(CUSTOMERS))
-                .contains(
-                        Schema.newBuilder()
-                                .physicalColumn("id", DataTypes.INT())
-                                .physicalColumn("name", DataTypes.STRING())
-                                .physicalColumn("phone", DataTypes.STRING())
-                                .primaryKey("id")
-                                .build());
+        {
+            SchemaManager schemaManager = new SchemaManager();
+            schemaManager.applyOriginalSchemaChange(
+                    new CreateTableEvent(CUSTOMERS, CUSTOMERS_SCHEMA));
+            schemaManager.applyOriginalSchemaChange(
+                    new AlterColumnTypeEvent(
+                            CUSTOMERS, ImmutableMap.of("phone", DataTypes.STRING())));
+            assertThat(schemaManager.getLatestOriginalSchema(CUSTOMERS))
+                    .contains(
+                            Schema.newBuilder()
+                                    .physicalColumn("id", DataTypes.INT())
+                                    .physicalColumn("name", DataTypes.STRING())
+                                    .physicalColumn("phone", DataTypes.STRING())
+                                    .primaryKey("id")
+                                    .build());
+        }
+        {
+            SchemaManager schemaManager = new SchemaManager();
+            schemaManager.applyEvolvedSchemaChange(
+                    new CreateTableEvent(CUSTOMERS, CUSTOMERS_SCHEMA));
+            schemaManager.applyEvolvedSchemaChange(
+                    new AlterColumnTypeEvent(
+                            CUSTOMERS, ImmutableMap.of("phone", DataTypes.STRING())));
+            assertThat(schemaManager.getLatestEvolvedSchema(CUSTOMERS))
+                    .contains(
+                            Schema.newBuilder()
+                                    .physicalColumn("id", DataTypes.INT())
+                                    .physicalColumn("name", DataTypes.STRING())
+                                    .physicalColumn("phone", DataTypes.STRING())
+                                    .primaryKey("id")
+                                    .build());
+        }
     }
 
     @Test
     void testHandlingDropColumnEvent() {
         SchemaManager schemaManager = new SchemaManager();
-        schemaManager.applySchemaChange(new CreateTableEvent(CUSTOMERS, CUSTOMERS_SCHEMA));
-        schemaManager.applySchemaChange(
+        schemaManager.applyOriginalSchemaChange(new CreateTableEvent(CUSTOMERS, CUSTOMERS_SCHEMA));
+        schemaManager.applyOriginalSchemaChange(
                 new DropColumnEvent(
                         CUSTOMERS,
                         Arrays.asList(
                                 Column.physicalColumn("name", DataTypes.STRING()),
                                 Column.physicalColumn("phone", DataTypes.BIGINT()))));
-        assertThat(schemaManager.getLatestSchema(CUSTOMERS))
+        assertThat(schemaManager.getLatestOriginalSchema(CUSTOMERS))
                 .contains(
                         Schema.newBuilder()
                                 .physicalColumn("id", DataTypes.INT())
@@ -144,60 +166,132 @@ class SchemaManagerTest {
 
     @Test
     void testHandlingRenameColumnEvent() {
-        SchemaManager schemaManager = new SchemaManager();
-        schemaManager.applySchemaChange(new CreateTableEvent(CUSTOMERS, CUSTOMERS_SCHEMA));
-        schemaManager.applySchemaChange(
-                new RenameColumnEvent(CUSTOMERS, ImmutableMap.of("name", "new_name")));
-        assertThat(schemaManager.getLatestSchema(CUSTOMERS))
-                .contains(
-                        Schema.newBuilder()
-                                .physicalColumn("id", DataTypes.INT())
-                                .physicalColumn("new_name", DataTypes.STRING())
-                                .physicalColumn("phone", DataTypes.BIGINT())
-                                .primaryKey("id")
-                                .build());
+        {
+            SchemaManager schemaManager = new SchemaManager();
+            schemaManager.applyOriginalSchemaChange(
+                    new CreateTableEvent(CUSTOMERS, CUSTOMERS_SCHEMA));
+            schemaManager.applyOriginalSchemaChange(
+                    new RenameColumnEvent(CUSTOMERS, ImmutableMap.of("name", "new_name")));
+            assertThat(schemaManager.getLatestOriginalSchema(CUSTOMERS))
+                    .contains(
+                            Schema.newBuilder()
+                                    .physicalColumn("id", DataTypes.INT())
+                                    .physicalColumn("new_name", DataTypes.STRING())
+                                    .physicalColumn("phone", DataTypes.BIGINT())
+                                    .primaryKey("id")
+                                    .build());
+        }
+        {
+            SchemaManager schemaManager = new SchemaManager();
+            schemaManager.applyEvolvedSchemaChange(
+                    new CreateTableEvent(CUSTOMERS, CUSTOMERS_SCHEMA));
+            schemaManager.applyEvolvedSchemaChange(
+                    new RenameColumnEvent(CUSTOMERS, ImmutableMap.of("name", "new_name")));
+            assertThat(schemaManager.getLatestEvolvedSchema(CUSTOMERS))
+                    .contains(
+                            Schema.newBuilder()
+                                    .physicalColumn("id", DataTypes.INT())
+                                    .physicalColumn("new_name", DataTypes.STRING())
+                                    .physicalColumn("phone", DataTypes.BIGINT())
+                                    .primaryKey("id")
+                                    .build());
+        }
     }
 
     @Test
     void testGettingHistoricalSchema() {
-        SchemaManager schemaManager = new SchemaManager();
-        schemaManager.applySchemaChange(new CreateTableEvent(CUSTOMERS, CUSTOMERS_SCHEMA));
-        schemaManager.applySchemaChange(
-                new RenameColumnEvent(CUSTOMERS, ImmutableMap.of("name", "new_name")));
-        schemaManager.applySchemaChange(
-                new RenameColumnEvent(CUSTOMERS, ImmutableMap.of("phone", "new_phone")));
-        assertThat(schemaManager.getSchema(CUSTOMERS, 1))
-                .isEqualTo(
-                        Schema.newBuilder()
-                                .physicalColumn("id", DataTypes.INT())
-                                .physicalColumn("new_name", DataTypes.STRING())
-                                .physicalColumn("phone", DataTypes.BIGINT())
-                                .primaryKey("id")
-                                .build());
+        {
+            SchemaManager schemaManager = new SchemaManager();
+            schemaManager.applyOriginalSchemaChange(
+                    new CreateTableEvent(CUSTOMERS, CUSTOMERS_SCHEMA));
+            schemaManager.applyOriginalSchemaChange(
+                    new RenameColumnEvent(CUSTOMERS, ImmutableMap.of("name", "new_name")));
+            schemaManager.applyOriginalSchemaChange(
+                    new RenameColumnEvent(CUSTOMERS, ImmutableMap.of("phone", "new_phone")));
+            assertThat(schemaManager.getOriginalSchema(CUSTOMERS, 1))
+                    .isEqualTo(
+                            Schema.newBuilder()
+                                    .physicalColumn("id", DataTypes.INT())
+                                    .physicalColumn("new_name", DataTypes.STRING())
+                                    .physicalColumn("phone", DataTypes.BIGINT())
+                                    .primaryKey("id")
+                                    .build());
+        }
+        {
+            SchemaManager schemaManager = new SchemaManager();
+            schemaManager.applyEvolvedSchemaChange(
+                    new CreateTableEvent(CUSTOMERS, CUSTOMERS_SCHEMA));
+            schemaManager.applyEvolvedSchemaChange(
+                    new RenameColumnEvent(CUSTOMERS, ImmutableMap.of("name", "new_name")));
+            schemaManager.applyEvolvedSchemaChange(
+                    new RenameColumnEvent(CUSTOMERS, ImmutableMap.of("phone", "new_phone")));
+            assertThat(schemaManager.getEvolvedSchema(CUSTOMERS, 1))
+                    .isEqualTo(
+                            Schema.newBuilder()
+                                    .physicalColumn("id", DataTypes.INT())
+                                    .physicalColumn("new_name", DataTypes.STRING())
+                                    .physicalColumn("phone", DataTypes.BIGINT())
+                                    .primaryKey("id")
+                                    .build());
+        }
     }
 
     @Test
     void testVersionCleanup() {
-        SchemaManager schemaManager = new SchemaManager();
-        schemaManager.applySchemaChange(new CreateTableEvent(CUSTOMERS, CUSTOMERS_SCHEMA));
-        schemaManager.applySchemaChange(
-                new RenameColumnEvent(CUSTOMERS, ImmutableMap.of("name", "new_name")));
-        schemaManager.applySchemaChange(
-                new RenameColumnEvent(CUSTOMERS, ImmutableMap.of("phone", "new_phone")));
-        schemaManager.applySchemaChange(
-                new RenameColumnEvent(CUSTOMERS, ImmutableMap.of("new_phone", "new_phone_2")));
-        assertThatThrownBy(() -> schemaManager.getSchema(CUSTOMERS, 0))
-                .isInstanceOf(IllegalArgumentException.class)
-                .hasMessage("Schema version %s does not exist for table \"%s\"", 0, CUSTOMERS);
+        {
+            SchemaManager schemaManager = new SchemaManager();
+            schemaManager.applyOriginalSchemaChange(
+                    new CreateTableEvent(CUSTOMERS, CUSTOMERS_SCHEMA));
+            schemaManager.applyOriginalSchemaChange(
+                    new RenameColumnEvent(CUSTOMERS, ImmutableMap.of("name", "new_name")));
+            schemaManager.applyOriginalSchemaChange(
+                    new RenameColumnEvent(CUSTOMERS, ImmutableMap.of("phone", "new_phone")));
+            schemaManager.applyOriginalSchemaChange(
+                    new RenameColumnEvent(CUSTOMERS, ImmutableMap.of("new_phone", "new_phone_2")));
+            assertThatThrownBy(() -> schemaManager.getOriginalSchema(CUSTOMERS, 0))
+                    .isInstanceOf(IllegalArgumentException.class)
+                    .hasMessage("Schema version %s does not exist for table \"%s\"", 0, CUSTOMERS);
+        }
+        {
+            SchemaManager schemaManager = new SchemaManager();
+            schemaManager.applyEvolvedSchemaChange(
+                    new CreateTableEvent(CUSTOMERS, CUSTOMERS_SCHEMA));
+            schemaManager.applyEvolvedSchemaChange(
+                    new RenameColumnEvent(CUSTOMERS, ImmutableMap.of("name", "new_name")));
+            schemaManager.applyEvolvedSchemaChange(
+                    new RenameColumnEvent(CUSTOMERS, ImmutableMap.of("phone", "new_phone")));
+            schemaManager.applyEvolvedSchemaChange(
+                    new RenameColumnEvent(CUSTOMERS, ImmutableMap.of("new_phone", "new_phone_2")));
+            assertThatThrownBy(() -> schemaManager.getEvolvedSchema(CUSTOMERS, 0))
+                    .isInstanceOf(IllegalArgumentException.class)
+                    .hasMessage("Schema version %s does not exist for table \"%s\"", 0, CUSTOMERS);
+        }
     }
 
     @Test
     void testSerde() throws Exception {
-        SchemaManager schemaManager = new SchemaManager();
-        schemaManager.applySchemaChange(new CreateTableEvent(CUSTOMERS, CUSTOMERS_SCHEMA));
-        schemaManager.applySchemaChange(new CreateTableEvent(PRODUCTS, PRODUCTS_SCHEMA));
-        byte[] serialized = SchemaManager.SERIALIZER.serialize(schemaManager);
-        SchemaManager deserialized = SchemaManager.SERIALIZER.deserialize(0, serialized);
-        assertThat(deserialized).isEqualTo(schemaManager);
+        {
+            SchemaManager schemaManager = new SchemaManager();
+            schemaManager.applyOriginalSchemaChange(
+                    new CreateTableEvent(CUSTOMERS, CUSTOMERS_SCHEMA));
+            schemaManager.applyOriginalSchemaChange(
+                    new CreateTableEvent(PRODUCTS, PRODUCTS_SCHEMA));
+            byte[] serialized = SchemaManager.SERIALIZER.serialize(schemaManager);
+            SchemaManager deserialized =
+                    SchemaManager.SERIALIZER.deserialize(
+                            SchemaManager.Serializer.CURRENT_VERSION, serialized);
+            assertThat(deserialized).isEqualTo(schemaManager);
+        }
+        {
+            SchemaManager schemaManager = new SchemaManager();
+            schemaManager.applyEvolvedSchemaChange(
+                    new CreateTableEvent(CUSTOMERS, CUSTOMERS_SCHEMA));
+            schemaManager.applyEvolvedSchemaChange(new CreateTableEvent(PRODUCTS, PRODUCTS_SCHEMA));
+            byte[] serialized = SchemaManager.SERIALIZER.serialize(schemaManager);
+            SchemaManager deserialized =
+                    SchemaManager.SERIALIZER.deserialize(
+                            SchemaManager.Serializer.CURRENT_VERSION, serialized);
+            assertThat(deserialized).isEqualTo(schemaManager);
+        }
     }
 }

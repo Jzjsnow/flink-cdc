@@ -95,16 +95,10 @@ public class CustomRegistryAndReSendCreateTable extends AbstractStreamOperator<E
         ChangeEvent changeEvent = (ChangeEvent) event;
         TableId tableId = changeEvent.tableId();
         if (!processedTableIds.contains(tableId)) {
-            Optional<Schema> schema = schemaEvolutionClient.getLatestSchema(tableId);
-            if (schema.isPresent()) {
-                output.collect(new StreamRecord<>(new CreateTableEvent(tableId, schema.get())));
-            } else {
-                throw new RuntimeException(
-                        "Could not find schema message from SchemaRegistry for " + tableId);
-            }
+            emitLatestSchema(changeEvent.tableId());
             processedTableIds.add(changeEvent.tableId());
         }
-
+        processedTableIds.add(changeEvent.tableId());
         output.collect(element);
     }
 
@@ -116,5 +110,16 @@ public class CustomRegistryAndReSendCreateTable extends AbstractStreamOperator<E
         // only need to notify schema registry
         schemaEvolutionClient.notifyFlushSuccess(
                 getRuntimeContext().getIndexOfThisSubtask(), flushEvent.getTableId());
+    }
+
+    public void emitLatestSchema(TableId tableId) throws Exception {
+        Optional<Schema> schema = schemaEvolutionClient.getLatestEvolvedSchema(tableId);
+        if (schema.isPresent()) {
+            output.collect(new StreamRecord<>(new CreateTableEvent(tableId, schema.get())));
+        } else {
+            throw new RuntimeException(
+                    "Could not find schema message from SchemaRegistry for " + tableId);
+        }
+        processedTableIds.add(tableId);
     }
 }

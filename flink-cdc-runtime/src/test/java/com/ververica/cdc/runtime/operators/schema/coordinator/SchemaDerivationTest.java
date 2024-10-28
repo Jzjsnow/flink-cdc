@@ -16,6 +16,10 @@
 
 package com.ververica.cdc.runtime.operators.schema.coordinator;
 
+import org.apache.flink.api.java.tuple.Tuple2;
+
+import org.apache.flink.shaded.guava30.com.google.common.collect.ImmutableMap;
+
 import com.ververica.cdc.common.event.AddColumnEvent;
 import com.ververica.cdc.common.event.AlterColumnTypeEvent;
 import com.ververica.cdc.common.event.CreateTableEvent;
@@ -29,8 +33,6 @@ import com.ververica.cdc.common.schema.Schema;
 import com.ververica.cdc.common.schema.Selectors;
 import com.ververica.cdc.common.types.DataType;
 import com.ververica.cdc.common.types.DataTypes;
-import org.apache.flink.api.java.tuple.Tuple2;
-import org.apache.flink.shaded.guava30.com.google.common.collect.ImmutableMap;
 import org.junit.jupiter.api.Test;
 
 import java.io.ByteArrayInputStream;
@@ -127,7 +129,10 @@ class SchemaDerivationTest {
                 .containsTypeMapping(typeMapping);
 
         // Drop column
-        List<Column> droppedColumns = Arrays.asList(Column.physicalColumn("new_col1", null, null), Column.physicalColumn("new_col2", null, null));
+        List<Column> droppedColumns =
+                Arrays.asList(
+                        Column.physicalColumn("new_col1", null, null),
+                        Column.physicalColumn("new_col2", null, null));
         List<SchemaChangeEvent> derivedChangesAfterDropColumn =
                 schemaDerivation.applySchemaChange(new DropColumnEvent(TABLE_1, droppedColumns));
         assertThat(derivedChangesAfterDropColumn).hasSize(1);
@@ -194,12 +199,15 @@ class SchemaDerivationTest {
                 .containsTypeMapping(typeMapping);
         // Alter column type for table 2
         assertThat(
-                schemaDerivation.applySchemaChange(
-                        new AlterColumnTypeEvent(TABLE_2, typeMapping)))
+                        schemaDerivation.applySchemaChange(
+                                new AlterColumnTypeEvent(TABLE_2, typeMapping)))
                 .isEmpty();
 
         // Drop column for table 1
-        List<Column> droppedColumns = Arrays.asList(Column.physicalColumn("new_col1", null, null), Column.physicalColumn("new_col2", null, null));
+        List<Column> droppedColumns =
+                Arrays.asList(
+                        Column.physicalColumn("new_col1", null, null),
+                        Column.physicalColumn("new_col2", null, null));
         assertThat(schemaDerivation.applySchemaChange(new DropColumnEvent(TABLE_1, droppedColumns)))
                 .isEmpty();
         // Drop column for table 2
@@ -219,8 +227,8 @@ class SchemaDerivationTest {
                                 new PhysicalColumn("last_name", DataTypes.STRING(), null)));
         // Rename column for table 2
         assertThat(
-                schemaDerivation.applySchemaChange(
-                        new RenameColumnEvent(TABLE_2, renamedColumns)))
+                        schemaDerivation.applySchemaChange(
+                                new RenameColumnEvent(TABLE_2, renamedColumns)))
                 .isEmpty();
     }
 
@@ -237,6 +245,8 @@ class SchemaDerivationTest {
                 .asCreateTableEvent()
                 .hasTableId(MERGED_TABLE)
                 .hasSchema(SCHEMA);
+        derivedChangesAfterCreateTable.forEach(schemaManager::applyEvolvedSchemaChange);
+
         // Create table 2
         List<SchemaChangeEvent> derivedChangesAfterCreateTable2 =
                 schemaDerivation.applySchemaChange(
@@ -252,6 +262,7 @@ class SchemaDerivationTest {
                                                         "gender", DataTypes.STRING(), null)))),
                         new AlterColumnTypeEvent(
                                 MERGED_TABLE, ImmutableMap.of("age", DataTypes.BIGINT())));
+        derivedChangesAfterCreateTable2.forEach(schemaManager::applyEvolvedSchemaChange);
 
         // Add column for table 1
         AddColumnEvent.ColumnWithPosition newCol1 =
@@ -268,6 +279,8 @@ class SchemaDerivationTest {
                 .asAddColumnEvent()
                 .hasTableId(MERGED_TABLE)
                 .containsAddedColumns(newCol1, newCol2);
+        derivedChangesAfterAddColumn.forEach(schemaManager::applyEvolvedSchemaChange);
+
         // Add column for table 2
         List<SchemaChangeEvent> derivedChangesAfterAddColumnForTable2 =
                 schemaDerivation.applySchemaChange(
@@ -286,6 +299,7 @@ class SchemaDerivationTest {
                 .containsTypeMapping(
                         ImmutableMap.of(
                                 "new_col1", DataTypes.STRING(), "new_col2", DataTypes.STRING()));
+        derivedChangesAfterAddColumnForTable2.forEach(schemaManager::applyEvolvedSchemaChange);
 
         // Alter column type for table 1
         ImmutableMap<String, DataType> typeMapping = ImmutableMap.of("age", DataTypes.BIGINT());
@@ -299,13 +313,16 @@ class SchemaDerivationTest {
                                 TABLE_2, ImmutableMap.of("age", DataTypes.TINYINT())));
         assertThat(derivedChangesAfterAlterColumnTypeForTable2).isEmpty();
 
-//        // Drop column for table 1
-//        List<String> droppedColumns = Arrays.asList("new_col1", "new_col2");
-//        assertThat(schemaDerivation.applySchemaChange(new DropColumnEvent(TABLE_1, droppedColumns)))
-//                .isEmpty();
-//        // Drop column for table 2
-//        assertThat(schemaDerivation.applySchemaChange(new DropColumnEvent(TABLE_2, droppedColumns)))
-//                .isEmpty();
+        // Drop column for table 1
+        List<Column> droppedColumns =
+                Arrays.asList(
+                        Column.physicalColumn("new_col1", null, null),
+                        Column.physicalColumn("new_col2", null, null));
+        assertThat(schemaDerivation.applySchemaChange(new DropColumnEvent(TABLE_1, droppedColumns)))
+                .isEmpty();
+        // Drop column for table 2
+        assertThat(schemaDerivation.applySchemaChange(new DropColumnEvent(TABLE_2, droppedColumns)))
+                .isEmpty();
 
         // Rename column for table 1
         Map<String, String> renamedColumns = ImmutableMap.of("name", "last_name");
@@ -318,6 +335,8 @@ class SchemaDerivationTest {
                 .containsAddedColumns(
                         new AddColumnEvent.ColumnWithPosition(
                                 new PhysicalColumn("last_name", DataTypes.STRING(), null)));
+        derivedChangesAfterRenameColumn.forEach(schemaManager::applyEvolvedSchemaChange);
+
         // Rename column for table 2
         List<SchemaChangeEvent> derivedChangesAfterRenameColumnForTable2 =
                 schemaDerivation.applySchemaChange(
@@ -329,8 +348,9 @@ class SchemaDerivationTest {
                 .containsAddedColumns(
                         new AddColumnEvent.ColumnWithPosition(
                                 new PhysicalColumn("first_name", DataTypes.STRING(), null)));
+        derivedChangesAfterRenameColumnForTable2.forEach(schemaManager::applyEvolvedSchemaChange);
 
-        assertThat(schemaManager.getLatestSchema(MERGED_TABLE))
+        assertThat(schemaManager.getLatestEvolvedSchema(MERGED_TABLE))
                 .contains(
                         Schema.newBuilder()
                                 .column(Column.physicalColumn("id", DataTypes.BIGINT()))
@@ -359,9 +379,9 @@ class SchemaDerivationTest {
 
         // Create table 2
         assertThatThrownBy(
-                () ->
-                        schemaDerivation.applySchemaChange(
-                                new CreateTableEvent(TABLE_2, INCOMPATIBLE_SCHEMA)))
+                        () ->
+                                schemaDerivation.applySchemaChange(
+                                        new CreateTableEvent(TABLE_2, INCOMPATIBLE_SCHEMA)))
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessage("Incompatible types: \"INT\" and \"STRING\"");
     }
@@ -376,11 +396,11 @@ class SchemaDerivationTest {
         SchemaDerivation schemaDerivation =
                 new SchemaDerivation(new SchemaManager(), ROUTES, derivationMapping);
         try (ByteArrayOutputStream baos = new ByteArrayOutputStream();
-             DataOutputStream out = new DataOutputStream(baos)) {
+                DataOutputStream out = new DataOutputStream(baos)) {
             SchemaDerivation.serializeDerivationMapping(schemaDerivation, out);
             byte[] serialized = baos.toByteArray();
             try (ByteArrayInputStream bais = new ByteArrayInputStream(serialized);
-                 DataInputStream in = new DataInputStream(bais)) {
+                    DataInputStream in = new DataInputStream(bais)) {
                 Map<TableId, Set<TableId>> deserialized =
                         SchemaDerivation.deserializerDerivationMapping(in);
                 assertThat(deserialized).isEqualTo(derivationMapping);

@@ -16,6 +16,10 @@
 
 package com.ververica.cdc.composer.flink.translator;
 
+import org.apache.flink.api.java.tuple.Tuple2;
+import org.apache.flink.streaming.api.datastream.DataStream;
+import org.apache.flink.streaming.api.datastream.SingleOutputStreamOperator;
+
 import com.ververica.cdc.common.annotation.Internal;
 import com.ververica.cdc.common.event.Event;
 import com.ververica.cdc.common.event.SchemaChangeEvent;
@@ -25,9 +29,6 @@ import com.ververica.cdc.common.sink.MetadataApplier;
 import com.ververica.cdc.composer.definition.RouteDef;
 import com.ververica.cdc.runtime.operators.schema.SchemaOperatorFactory;
 import com.ververica.cdc.runtime.typeutils.EventTypeInfo;
-import org.apache.flink.api.java.tuple.Tuple2;
-import org.apache.flink.streaming.api.datastream.DataStream;
-import org.apache.flink.streaming.api.datastream.SingleOutputStreamOperator;
 
 import java.time.Duration;
 import java.util.ArrayList;
@@ -53,7 +54,10 @@ public class SchemaOperatorTranslator {
     }
 
     public DataStream<Event> translate(
-            DataStream<Event> input, int parallelism, MetadataApplier metadataApplier, List<RouteDef> routes) {
+            DataStream<Event> input,
+            int parallelism,
+            MetadataApplier metadataApplier,
+            List<RouteDef> routes) {
         return addSchemaOperator(input, parallelism, metadataApplier, schemaChangeBehavior, routes);
     }
 
@@ -77,7 +81,7 @@ public class SchemaOperatorTranslator {
                         "SchemaOperator",
                         new EventTypeInfo(),
                         new SchemaOperatorFactory(
-                                metadataApplier, rpcTimeOut, schemaChangeBehavior,routingRules));
+                                metadataApplier, rpcTimeOut, schemaChangeBehavior, routingRules));
         stream.uid(schemaOperatorUid).setParallelism(parallelism);
         return stream;
     }

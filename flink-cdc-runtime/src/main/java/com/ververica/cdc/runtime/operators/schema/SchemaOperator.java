@@ -16,6 +16,23 @@
 
 package com.ververica.cdc.runtime.operators.schema;
 
+import org.apache.flink.api.java.tuple.Tuple2;
+import org.apache.flink.runtime.jobgraph.tasks.TaskOperatorEventGateway;
+import org.apache.flink.runtime.operators.coordination.CoordinationRequest;
+import org.apache.flink.runtime.operators.coordination.CoordinationResponse;
+import org.apache.flink.streaming.api.graph.StreamConfig;
+import org.apache.flink.streaming.api.operators.AbstractStreamOperator;
+import org.apache.flink.streaming.api.operators.ChainingStrategy;
+import org.apache.flink.streaming.api.operators.OneInputStreamOperator;
+import org.apache.flink.streaming.api.operators.Output;
+import org.apache.flink.streaming.runtime.streamrecord.StreamRecord;
+import org.apache.flink.streaming.runtime.tasks.StreamTask;
+import org.apache.flink.util.SerializedValue;
+
+import org.apache.flink.shaded.guava30.com.google.common.cache.CacheBuilder;
+import org.apache.flink.shaded.guava30.com.google.common.cache.CacheLoader;
+import org.apache.flink.shaded.guava30.com.google.common.cache.LoadingCache;
+
 import com.ververica.cdc.common.annotation.Internal;
 import com.ververica.cdc.common.annotation.VisibleForTesting;
 import com.ververica.cdc.common.data.RecordData;
@@ -43,25 +60,11 @@ import com.ververica.cdc.runtime.operators.schema.event.SchemaChangeResultReques
 import com.ververica.cdc.runtime.operators.schema.event.SchemaChangeResultResponse;
 import com.ververica.cdc.runtime.operators.sink.SchemaEvolutionClient;
 import com.ververica.cdc.runtime.typeutils.BinaryRecordDataGenerator;
-import org.apache.flink.api.java.tuple.Tuple2;
-import org.apache.flink.runtime.jobgraph.tasks.TaskOperatorEventGateway;
-import org.apache.flink.runtime.operators.coordination.CoordinationRequest;
-import org.apache.flink.runtime.operators.coordination.CoordinationResponse;
-import org.apache.flink.shaded.guava30.com.google.common.cache.CacheBuilder;
-import org.apache.flink.shaded.guava30.com.google.common.cache.CacheLoader;
-import org.apache.flink.shaded.guava30.com.google.common.cache.LoadingCache;
-import org.apache.flink.streaming.api.graph.StreamConfig;
-import org.apache.flink.streaming.api.operators.AbstractStreamOperator;
-import org.apache.flink.streaming.api.operators.ChainingStrategy;
-import org.apache.flink.streaming.api.operators.OneInputStreamOperator;
-import org.apache.flink.streaming.api.operators.Output;
-import org.apache.flink.streaming.runtime.streamrecord.StreamRecord;
-import org.apache.flink.streaming.runtime.tasks.StreamTask;
-import org.apache.flink.util.SerializedValue;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import javax.annotation.Nullable;
+
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
@@ -82,10 +85,15 @@ public class SchemaOperator extends AbstractStreamOperator<Event>
     private static final Logger LOG = LoggerFactory.getLogger(SchemaOperator.class);
     private static final Duration CACHE_EXPIRE_DURATION = Duration.ofDays(1);
     private final List<Tuple2<String, TableId>> routingRules;
+    /** Storing route source table selector, sink table name in a tuple. */
     private transient List<Tuple2<Selectors, TableId>> routes;
+
     private transient TaskOperatorEventGateway toCoordinator;
     private transient SchemaEvolutionClient schemaEvolutionClient;
-    private transient LoadingCache<TableId, Schema> cachedSchemas;
+    private transient LoadingCache<TableId, Schema> originalSchema;
+    private transient LoadingCache<TableId, Schema> evolvedSchema;
+    private transient LoadingCache<TableId, Boolean> schemaDivergesMap;
+
     private final long rpcTimeOutInMillis;
     private final SchemaChangeBehavior schemaChangeBehavior;
     private transient int subTaskId;
@@ -98,7 +106,10 @@ public class SchemaOperator extends AbstractStreamOperator<Event>
         this.routingRules = routingRules;
     }
 
-    public SchemaOperator(Duration rpcTimeOut, SchemaChangeBehavior schemaChangeBehavior, List<Tuple2<String, TableId>> routingRules) {
+    public SchemaOperator(
+            Duration rpcTimeOut,
+            SchemaChangeBehavior schemaChangeBehavior,
+            List<Tuple2<String, TableId>> routingRules) {
         this.chainingStrategy = ChainingStrategy.ALWAYS;
         this.rpcTimeOutInMillis = rpcTimeOut.toMillis();
         this.schemaChangeBehavior = schemaChangeBehavior;
@@ -132,14 +143,34 @@ public class SchemaOperator extends AbstractStreamOperator<Event>
                                 })
                         .collect(Collectors.toList());
         schemaEvolutionClient = new SchemaEvolutionClient(toCoordinator, getOperatorID());
-        cachedSchemas =
+        evolvedSchema =
                 CacheBuilder.newBuilder()
                         .expireAfterAccess(CACHE_EXPIRE_DURATION)
                         .build(
                                 new CacheLoader<TableId, Schema>() {
                                     @Override
                                     public Schema load(TableId tableId) {
-                                        return getLatestSchema(tableId);
+                                        return getLatestEvolvedSchema(tableId);
+                                    }
+                                });
+        originalSchema =
+                CacheBuilder.newBuilder()
+                        .expireAfterAccess(CACHE_EXPIRE_DURATION)
+                        .build(
+                                new CacheLoader<TableId, Schema>() {
+                                    @Override
+                                    public Schema load(TableId tableId) throws Exception {
+                                        return getLatestOriginalSchema(tableId);
+                                    }
+                                });
+        schemaDivergesMap =
+                CacheBuilder.newBuilder()
+                        .expireAfterAccess(CACHE_EXPIRE_DURATION)
+                        .build(
+                                new CacheLoader<TableId, Boolean>() {
+                                    @Override
+                                    public Boolean load(TableId tableId) throws Exception {
+                                        return checkSchemaDiverges(tableId);
                                     }
                                 });
     }
@@ -153,69 +184,102 @@ public class SchemaOperator extends AbstractStreamOperator<Event>
         Event event = streamRecord.getValue();
         // Schema changes
         if (event instanceof SchemaChangeEvent) {
-            TableId tableId = ((SchemaChangeEvent) event).tableId();
             processSchemaChangeEvents((SchemaChangeEvent) event);
-            // Update caches
-            cachedSchemas.put(tableId, getLatestSchema(tableId));
-            getRoutedTable(tableId)
-                    .ifPresent(routed -> cachedSchemas.put(routed, getLatestSchema(routed)));
         } else if (event instanceof DataChangeEvent) {
-            // Data changes
-            DataChangeEvent dataChangeEvent = (DataChangeEvent) event;
-            TableId tableId = dataChangeEvent.tableId();
-            Optional<TableId> optionalRoutedTable = getRoutedTable(tableId);
-            if (optionalRoutedTable.isPresent()) {
-                output.collect(
-                        new StreamRecord<>(
-                                maybeFillInNullForEmptyColumns(
-                                        dataChangeEvent, optionalRoutedTable.get())));
-            } else {
-                output.collect(streamRecord);
-            }
+            processDataChangeEvents(streamRecord, (DataChangeEvent) event);
         } else {
             throw new RuntimeException("Unknown event type in Stream record: " + event);
         }
     }
 
-    private DataChangeEvent maybeFillInNullForEmptyColumns(
-            DataChangeEvent originalEvent, TableId routedTableId) {
+    private void processSchemaChangeEvents(SchemaChangeEvent event)
+            throws InterruptedException, TimeoutException {
+        TableId tableId = event.tableId();
+        LOG.info(
+                "{}> Table {} received SchemaChangeEvent {} and start to be blocked.",
+                subTaskId,
+                tableId,
+                event);
+        handleSchemaChangeEvent(tableId, event);
+        // Update caches
+        originalSchema.put(tableId, getLatestOriginalSchema(tableId));
+        schemaDivergesMap.put(tableId, checkSchemaDiverges(tableId));
+        getRoutedTable(tableId)
+                .ifPresent(routed -> evolvedSchema.put(routed, getLatestEvolvedSchema(routed)));
+    }
+
+    private void processDataChangeEvents(StreamRecord<Event> streamRecord, DataChangeEvent event) {
+        TableId tableId = event.tableId();
+        Optional<TableId> optionalRoutedTable = getRoutedTable(tableId);
+        if (optionalRoutedTable.isPresent()) {
+            output.collect(
+                    new StreamRecord<>(
+                            normalizeSchemaChangeEvents(event, optionalRoutedTable.get(), false)));
+        } else if (Boolean.FALSE.equals(schemaDivergesMap.getIfPresent(tableId))) {
+            output.collect(new StreamRecord<>(normalizeSchemaChangeEvents(event, true)));
+        } else {
+            output.collect(streamRecord);
+        }
+    }
+
+    private DataChangeEvent normalizeSchemaChangeEvents(
+            DataChangeEvent event, boolean tolerantMode) {
+        return normalizeSchemaChangeEvents(event, event.tableId(), tolerantMode);
+    }
+
+    private DataChangeEvent normalizeSchemaChangeEvents(
+            DataChangeEvent event, TableId renamedTableId, boolean tolerantMode) {
         try {
-            Schema originalSchema = cachedSchemas.get(originalEvent.tableId());
-            Schema routedTableSchema = cachedSchemas.get(routedTableId);
-            if (originalSchema.equals(routedTableSchema)) {
-                return ChangeEventUtils.recreateDataChangeEvent(originalEvent, routedTableId);
+            Schema originalSchema = this.originalSchema.get(event.tableId());
+            Schema evolvedTableSchema = evolvedSchema.get(renamedTableId);
+            if (originalSchema.equals(evolvedTableSchema)) {
+                return ChangeEventUtils.recreateDataChangeEvent(event, renamedTableId);
             }
-            switch (originalEvent.op()) {
+            switch (event.op()) {
                 case INSERT:
                     return DataChangeEvent.insertEvent(
-                            routedTableId,
+                            renamedTableId,
                             regenerateRecordData(
-                                    originalEvent.after(), originalSchema, routedTableSchema),
-                            originalEvent.meta());
+                                    event.after(),
+                                    originalSchema,
+                                    evolvedTableSchema,
+                                    tolerantMode),
+                            event.meta());
                 case UPDATE:
                     return DataChangeEvent.updateEvent(
-                            routedTableId,
+                            renamedTableId,
                             regenerateRecordData(
-                                    originalEvent.before(), originalSchema, routedTableSchema),
+                                    event.before(),
+                                    originalSchema,
+                                    evolvedTableSchema,
+                                    tolerantMode),
                             regenerateRecordData(
-                                    originalEvent.after(), originalSchema, routedTableSchema),
-                            originalEvent.meta());
+                                    event.after(),
+                                    originalSchema,
+                                    evolvedTableSchema,
+                                    tolerantMode),
+                            event.meta());
                 case DELETE:
                     return DataChangeEvent.deleteEvent(
-                            routedTableId,
+                            renamedTableId,
                             regenerateRecordData(
-                                    originalEvent.before(), originalSchema, routedTableSchema),
-                            originalEvent.meta());
+                                    event.before(),
+                                    originalSchema,
+                                    evolvedTableSchema,
+                                    tolerantMode),
+                            event.meta());
                 case REPLACE:
                     return DataChangeEvent.replaceEvent(
-                            routedTableId,
+                            renamedTableId,
                             regenerateRecordData(
-                                    originalEvent.after(), originalSchema, routedTableSchema),
-                            originalEvent.meta());
+                                    event.after(),
+                                    originalSchema,
+                                    evolvedTableSchema,
+                                    tolerantMode),
+                            event.meta());
                 default:
                     throw new IllegalArgumentException(
-                            String.format(
-                                    "Unrecognized operation type \"%s\"", originalEvent.op()));
+                            String.format("Unrecognized operation type \"%s\"", event.op()));
             }
         } catch (Exception e) {
             throw new IllegalStateException("Unable to fill null for empty columns", e);
@@ -223,7 +287,10 @@ public class SchemaOperator extends AbstractStreamOperator<Event>
     }
 
     private RecordData regenerateRecordData(
-            RecordData recordData, Schema originalSchema, Schema routedTableSchema) {
+            RecordData recordData,
+            Schema originalSchema,
+            Schema routedTableSchema,
+            boolean tolerantMode) {
         // Regenerate record data
         List<RecordData.FieldGetter> fieldGetters = new ArrayList<>();
         for (Column column : routedTableSchema.getColumns()) {
@@ -235,11 +302,18 @@ public class SchemaOperator extends AbstractStreamOperator<Event>
                 RecordData.FieldGetter fieldGetter =
                         RecordData.createFieldGetter(
                                 originalSchema.getColumn(columnName).get().getType(), columnIndex);
-                // Check type compatibility
-                if (originalSchema.getColumn(columnName).get().getType().equals(column.getType())) {
+                // Check type compatibility, ignoring nullability
+                if (originalSchema
+                        .getColumn(columnName)
+                        .get()
+                        .getType()
+                        .nullable()
+                        .equals(column.getType().nullable())) {
                     fieldGetters.add(fieldGetter);
                 } else {
-                    fieldGetters.add(new TypeCoercionFieldGetter(column.getType(), fieldGetter));
+                    fieldGetters.add(
+                            new TypeCoercionFieldGetter(
+                                    column.getType(), fieldGetter, tolerantMode));
                 }
             }
         }
@@ -259,17 +333,6 @@ public class SchemaOperator extends AbstractStreamOperator<Event>
             }
         }
         return Optional.empty();
-    }
-
-    private void processSchemaChangeEvents(SchemaChangeEvent event)
-            throws InterruptedException, TimeoutException {
-        TableId tableId = event.tableId();
-        LOG.info(
-                "{}> Table {} received SchemaChangeEvent {} and start to be blocked.",
-                subTaskId,
-                tableId,
-                event);
-        handleSchemaChangeEvent(tableId, event);
     }
 
     private void handleSchemaChangeEvent(TableId tableId, SchemaChangeEvent schemaChangeEvent)
@@ -362,9 +425,9 @@ public class SchemaOperator extends AbstractStreamOperator<Event>
         }
     }
 
-    private Schema getLatestSchema(TableId tableId) {
+    private Schema getLatestEvolvedSchema(TableId tableId) {
         try {
-            Optional<Schema> optionalSchema = schemaEvolutionClient.getLatestSchema(tableId);
+            Optional<Schema> optionalSchema = schemaEvolutionClient.getLatestEvolvedSchema(tableId);
             if (!optionalSchema.isPresent()) {
                 throw new IllegalStateException(
                         String.format("Schema doesn't exist for table \"%s\"", tableId));
@@ -373,6 +436,30 @@ public class SchemaOperator extends AbstractStreamOperator<Event>
         } catch (Exception e) {
             throw new IllegalStateException(
                     String.format("Unable to get latest schema for table \"%s\"", tableId));
+        }
+    }
+
+    private Schema getLatestOriginalSchema(TableId tableId) {
+        try {
+            Optional<Schema> optionalSchema =
+                    schemaEvolutionClient.getLatestOriginalSchema(tableId);
+            if (!optionalSchema.isPresent()) {
+                throw new IllegalStateException(
+                        String.format("Schema doesn't exist for table \"%s\"", tableId));
+            }
+            return optionalSchema.get();
+        } catch (Exception e) {
+            throw new IllegalStateException(
+                    String.format("Unable to get latest schema for table \"%s\"", tableId));
+        }
+    }
+
+    private Boolean checkSchemaDiverges(TableId tableId) {
+        try {
+            return getLatestEvolvedSchema(tableId).equals(getLatestOriginalSchema(tableId));
+        } catch (IllegalStateException e) {
+            // schema fetch failed, regard it as diverged
+            return true;
         }
     }
 
@@ -387,11 +474,22 @@ public class SchemaOperator extends AbstractStreamOperator<Event>
     private static class TypeCoercionFieldGetter implements RecordData.FieldGetter {
         private final DataType destinationType;
         private final RecordData.FieldGetter originalFieldGetter;
+        private final boolean tolerantMode;
 
         public TypeCoercionFieldGetter(
-                DataType destinationType, RecordData.FieldGetter originalFieldGetter) {
+                DataType destinationType,
+                RecordData.FieldGetter originalFieldGetter,
+                boolean tolerantMode) {
             this.destinationType = destinationType;
             this.originalFieldGetter = originalFieldGetter;
+            this.tolerantMode = tolerantMode;
+        }
+
+        private Object fail(IllegalArgumentException e) throws IllegalArgumentException {
+            if (tolerantMode) {
+                return null;
+            }
+            throw e;
         }
 
         @Nullable
@@ -412,38 +510,42 @@ public class SchemaOperator extends AbstractStreamOperator<Event>
                     // INT
                     return ((Integer) originalField).longValue();
                 } else {
-                    throw new IllegalArgumentException(
-                            String.format(
-                                    "Cannot fit type \"%s\" into a BIGINT column. "
-                                            + "Currently only TINYINT / SMALLINT / INT can be accepted by a BIGINT column",
-                                    originalField.getClass()));
+                    return fail(
+                            new IllegalArgumentException(
+                                    String.format(
+                                            "Cannot fit type \"%s\" into a BIGINT column. "
+                                                    + "Currently only TINYINT / SMALLINT / INT can be accepted by a BIGINT column",
+                                            originalField.getClass())));
                 }
             } else if (destinationType.is(DataTypeFamily.APPROXIMATE_NUMERIC)) {
                 if (originalField instanceof Float) {
                     // FLOAT
                     return ((Float) originalField).doubleValue();
                 } else {
-                    throw new IllegalArgumentException(
-                            String.format(
-                                    "Cannot fit type \"%s\" into a DOUBLE column. "
-                                            + "Currently only FLOAT can be accepted by a DOUBLE column",
-                                    originalField.getClass()));
+                    return fail(
+                            new IllegalArgumentException(
+                                    String.format(
+                                            "Cannot fit type \"%s\" into a DOUBLE column. "
+                                                    + "Currently only FLOAT can be accepted by a DOUBLE column",
+                                            originalField.getClass())));
                 }
             } else if (destinationType.is(DataTypeRoot.VARCHAR)) {
                 if (originalField instanceof StringData) {
                     return originalField;
                 } else {
-                    throw new IllegalArgumentException(
-                            String.format(
-                                    "Cannot fit type \"%s\" into a STRING column. "
-                                            + "Currently only CHAR / VARCHAR can be accepted by a STRING column",
-                                    originalField.getClass()));
+                    return fail(
+                            new IllegalArgumentException(
+                                    String.format(
+                                            "Cannot fit type \"%s\" into a STRING column. "
+                                                    + "Currently only CHAR / VARCHAR can be accepted by a STRING column",
+                                            originalField.getClass())));
                 }
             } else {
-                throw new IllegalArgumentException(
-                        String.format(
-                                "Column type \"%s\" doesn't support type coercion",
-                                destinationType));
+                return fail(
+                        new IllegalArgumentException(
+                                String.format(
+                                        "Column type \"%s\" doesn't support type coercion",
+                                        destinationType)));
             }
         }
     }

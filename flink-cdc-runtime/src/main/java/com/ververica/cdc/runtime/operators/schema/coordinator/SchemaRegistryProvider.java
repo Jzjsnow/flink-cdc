@@ -16,14 +16,14 @@
 
 package com.ververica.cdc.runtime.operators.schema.coordinator;
 
-import com.ververica.cdc.common.event.TableId;
-import com.ververica.cdc.common.schema.Selectors;
 import org.apache.flink.api.java.tuple.Tuple2;
 import org.apache.flink.runtime.jobgraph.OperatorID;
 import org.apache.flink.runtime.operators.coordination.OperatorCoordinator;
 
 import com.ververica.cdc.common.annotation.Internal;
+import com.ververica.cdc.common.event.TableId;
 import com.ververica.cdc.common.pipeline.SchemaChangeBehavior;
+import com.ververica.cdc.common.schema.Selectors;
 import com.ververica.cdc.common.sink.MetadataApplier;
 
 import java.util.List;
@@ -73,6 +73,7 @@ public class SchemaRegistryProvider implements OperatorCoordinator.Provider {
                                     return new Tuple2<>(selectors, replaceBy);
                                 })
                         .collect(Collectors.toList());
-        return new SchemaRegistry(operatorName, context, metadataApplier, schemaChangeBehavior, routes);
+        return new SchemaRegistry(
+                operatorName, context, metadataApplier, schemaChangeBehavior, routes);
     }
 }
