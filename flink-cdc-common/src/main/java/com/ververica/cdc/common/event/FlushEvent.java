@@ -27,12 +27,24 @@ public class FlushEvent implements Event {
     /** The schema changes from which table. */
     private final TableId tableId;
 
+    private final Boolean isForCreateTableEvent;
+
     public FlushEvent(TableId tableId) {
         this.tableId = tableId;
+        this.isForCreateTableEvent = false;
+    }
+
+    public FlushEvent(TableId tableId, boolean isForCreateTableEvent) {
+        this.tableId = tableId;
+        this.isForCreateTableEvent = isForCreateTableEvent;
     }
 
     public TableId getTableId() {
         return tableId;
+    }
+
+    public Boolean getIsForCreateTableEvent() {
+        return isForCreateTableEvent;
     }
 
     @Override
@@ -44,7 +56,8 @@ public class FlushEvent implements Event {
             return false;
         }
         FlushEvent that = (FlushEvent) o;
-        return Objects.equals(tableId, that.tableId);
+        return Objects.equals(tableId, that.tableId)
+                && Objects.equals(isForCreateTableEvent, that.isForCreateTableEvent);
     }
 
     @Override

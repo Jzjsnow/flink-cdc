@@ -26,6 +26,7 @@ import com.ververica.cdc.common.event.DataChangeEvent;
 import com.ververica.cdc.common.event.Event;
 import com.ververica.cdc.common.event.FlushEvent;
 import com.ververica.cdc.common.event.SchemaChangeEvent;
+import com.ververica.cdc.runtime.serializer.BooleanSerializer;
 import com.ververica.cdc.runtime.serializer.EnumSerializer;
 import com.ververica.cdc.runtime.serializer.TableIdSerializer;
 import com.ververica.cdc.runtime.serializer.TypeSerializerSingleton;
@@ -47,6 +48,7 @@ public final class EventSerializer extends TypeSerializerSingleton<Event> {
             new EnumSerializer<>(EventClass.class);
     private final TypeSerializer<DataChangeEvent> dataChangeEventSerializer =
             DataChangeEventSerializer.INSTANCE;
+    private final BooleanSerializer booleanSerializer = BooleanSerializer.INSTANCE;
 
     @Override
     public boolean isImmutableType() {
@@ -61,7 +63,9 @@ public final class EventSerializer extends TypeSerializerSingleton<Event> {
     @Override
     public Event copy(Event from) {
         if (from instanceof FlushEvent) {
-            return new FlushEvent(tableIdSerializer.copy(((FlushEvent) from).getTableId()));
+            return new FlushEvent(
+                    tableIdSerializer.copy(((FlushEvent) from).getTableId()),
+                    booleanSerializer.copy(((FlushEvent) from).getIsForCreateTableEvent()));
         } else if (from instanceof SchemaChangeEvent) {
             return schemaChangeEventSerializer.copy((SchemaChangeEvent) from);
         } else if (from instanceof DataChangeEvent) {
@@ -85,6 +89,7 @@ public final class EventSerializer extends TypeSerializerSingleton<Event> {
         if (record instanceof FlushEvent) {
             enumSerializer.serialize(EventClass.FLUSH_EVENT, target);
             tableIdSerializer.serialize(((FlushEvent) record).getTableId(), target);
+            booleanSerializer.serialize(((FlushEvent) record).getIsForCreateTableEvent(), target);
         } else if (record instanceof SchemaChangeEvent) {
             enumSerializer.serialize(EventClass.SCHEME_CHANGE_EVENT, target);
             schemaChangeEventSerializer.serialize((SchemaChangeEvent) record, target);
@@ -101,7 +106,9 @@ public final class EventSerializer extends TypeSerializerSingleton<Event> {
         EventClass eventClass = enumSerializer.deserialize(source);
         switch (eventClass) {
             case FLUSH_EVENT:
-                return new FlushEvent(tableIdSerializer.deserialize(source));
+                return new FlushEvent(
+                        tableIdSerializer.deserialize(source),
+                        booleanSerializer.deserialize(source));
             case DATA_CHANGE_EVENT:
                 return dataChangeEventSerializer.deserialize(source);
             case SCHEME_CHANGE_EVENT:

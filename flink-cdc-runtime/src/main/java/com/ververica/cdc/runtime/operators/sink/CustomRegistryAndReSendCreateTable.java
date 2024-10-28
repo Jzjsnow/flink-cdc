@@ -78,7 +78,7 @@ public class CustomRegistryAndReSendCreateTable extends AbstractStreamOperator<E
 
         // FlushEvent triggers flush
         if (event instanceof FlushEvent) {
-            handleFlushEvent(((FlushEvent) event));
+            handleFlushEvent((FlushEvent) event);
             return;
         }
 
@@ -107,6 +107,12 @@ public class CustomRegistryAndReSendCreateTable extends AbstractStreamOperator<E
 
     private void handleFlushEvent(FlushEvent flushEvent) throws Exception {
         // do not need to flush element to iceberg
+        if (!processedTableIds.contains(flushEvent.getTableId())
+                && !flushEvent.getIsForCreateTableEvent()) {
+            LOG.info("Table {} has not been processed", flushEvent.getTableId());
+            emitLatestSchema(flushEvent.getTableId());
+            processedTableIds.add(flushEvent.getTableId());
+        }
         // only need to notify schema registry
         schemaEvolutionClient.notifyFlushSuccess(
                 getRuntimeContext().getIndexOfThisSubtask(), flushEvent.getTableId());
