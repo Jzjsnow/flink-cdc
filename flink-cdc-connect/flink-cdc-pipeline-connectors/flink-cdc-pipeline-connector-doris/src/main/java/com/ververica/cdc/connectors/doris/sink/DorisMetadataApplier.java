@@ -25,6 +25,7 @@ import com.ververica.cdc.common.event.CreateTableEvent;
 import com.ververica.cdc.common.event.DropColumnEvent;
 import com.ververica.cdc.common.event.RenameColumnEvent;
 import com.ververica.cdc.common.event.SchemaChangeEvent;
+import com.ververica.cdc.common.event.SchemaChangeEventType;
 import com.ververica.cdc.common.event.TableId;
 import com.ververica.cdc.common.schema.Column;
 import com.ververica.cdc.common.schema.Schema;
@@ -34,6 +35,7 @@ import com.ververica.cdc.common.types.LocalZonedTimestampType;
 import com.ververica.cdc.common.types.TimestampType;
 import com.ververica.cdc.common.types.ZonedTimestampType;
 import com.ververica.cdc.common.types.utils.DataTypeUtils;
+import org.apache.commons.compress.utils.Sets;
 import org.apache.doris.flink.catalog.DorisTypeMapper;
 import org.apache.doris.flink.catalog.doris.DataModel;
 import org.apache.doris.flink.catalog.doris.FieldSchema;
@@ -50,7 +52,12 @@ import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
+import static com.ververica.cdc.common.event.SchemaChangeEventType.ADD_COLUMN;
+import static com.ververica.cdc.common.event.SchemaChangeEventType.CREATE_TABLE;
+import static com.ververica.cdc.common.event.SchemaChangeEventType.DROP_COLUMN;
+import static com.ververica.cdc.common.event.SchemaChangeEventType.RENAME_COLUMN;
 import static com.ververica.cdc.connectors.doris.sink.DorisDataSinkOptions.TABLE_CREATE_PROPERTIES_PREFIX;
 
 /** Supports {@link DorisDataSink} to schema evolution. */
@@ -59,11 +66,23 @@ public class DorisMetadataApplier implements MetadataApplier {
     private DorisOptions dorisOptions;
     private SchemaChangeManager schemaChangeManager;
     private Configuration config;
+    private final Set<SchemaChangeEventType> enabledSchemaEvolutionTypes;
 
     public DorisMetadataApplier(DorisOptions dorisOptions, Configuration config) {
         this.dorisOptions = dorisOptions;
         this.schemaChangeManager = new SchemaChangeManager(dorisOptions);
         this.config = config;
+        this.enabledSchemaEvolutionTypes = getSupportedSchemaEvolutionTypes();
+    }
+
+    @Override
+    public boolean acceptsSchemaEvolutionType(SchemaChangeEventType schemaChangeEventType) {
+        return enabledSchemaEvolutionTypes.contains(schemaChangeEventType);
+    }
+
+    @Override
+    public Set<SchemaChangeEventType> getSupportedSchemaEvolutionTypes() {
+        return Sets.newHashSet(CREATE_TABLE, ADD_COLUMN, DROP_COLUMN, RENAME_COLUMN);
     }
 
     @Override

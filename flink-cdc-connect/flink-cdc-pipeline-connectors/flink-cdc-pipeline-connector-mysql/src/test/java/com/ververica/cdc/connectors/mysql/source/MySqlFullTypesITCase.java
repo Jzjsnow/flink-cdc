@@ -33,8 +33,8 @@ import com.ververica.cdc.common.types.DataTypes;
 import com.ververica.cdc.common.types.RowType;
 import com.ververica.cdc.connectors.mysql.source.config.MySqlSourceConfigFactory;
 import com.ververica.cdc.connectors.mysql.table.StartupOptions;
-import com.ververica.cdc.connectors.mysql.testutils.MySqSourceTestUtils;
 import com.ververica.cdc.connectors.mysql.testutils.MySqlContainer;
+import com.ververica.cdc.connectors.mysql.testutils.MySqlSourceTestUtils;
 import com.ververica.cdc.connectors.mysql.testutils.MySqlVersion;
 import com.ververica.cdc.connectors.mysql.testutils.RecordDataTestUtils;
 import com.ververica.cdc.connectors.mysql.testutils.UniqueDatabase;
@@ -55,10 +55,9 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.stream.Stream;
 
-import static com.ververica.cdc.connectors.mysql.testutils.MySqSourceTestUtils.TEST_PASSWORD;
-import static com.ververica.cdc.connectors.mysql.testutils.MySqSourceTestUtils.TEST_USER;
-import static com.ververica.cdc.connectors.mysql.testutils.MySqSourceTestUtils.fetchResults;
-import static com.ververica.cdc.connectors.mysql.testutils.MySqSourceTestUtils.getServerId;
+import static com.ververica.cdc.connectors.mysql.testutils.MySqlSourceTestUtils.TEST_PASSWORD;
+import static com.ververica.cdc.connectors.mysql.testutils.MySqlSourceTestUtils.TEST_USER;
+import static com.ververica.cdc.connectors.mysql.testutils.MySqlSourceTestUtils.getServerId;
 import static com.ververica.cdc.connectors.mysql.testutils.RecordDataTestUtils.recordFields;
 import static javax.xml.bind.DatatypeConverter.parseHexBinary;
 import static org.assertj.core.api.Assertions.assertThat;
@@ -324,8 +323,9 @@ public class MySqlFullTypesITCase extends MySqlSourceTestBase {
                         .executeAndCollect();
 
         // skip CreateTableEvent
-        List<Event> snapshotResults = MySqSourceTestUtils.fetchResults(iterator, 2);
-        RecordData snapshotRecord = ((DataChangeEvent) snapshotResults.get(1)).after();
+        List<Event> snapshotResults =
+                MySqlSourceTestUtils.fetchResultsAndCreateTableEvent(iterator, 1).f0;
+        RecordData snapshotRecord = ((DataChangeEvent) snapshotResults.get(0)).after();
 
         Assertions.assertThat(RecordDataTestUtils.recordFields(snapshotRecord, recordType))
                 .isEqualTo(expectedSnapshot);
@@ -335,7 +335,8 @@ public class MySqlFullTypesITCase extends MySqlSourceTestBase {
             statement.execute("UPDATE precision_types SET time_6_c = null WHERE id = 1;");
         }
 
-        List<Event> streamResults = MySqSourceTestUtils.fetchResults(iterator, 1);
+        List<Event> streamResults =
+                MySqlSourceTestUtils.fetchResultsAndCreateTableEvent(iterator, 1).f0;
         RecordData streamRecord = ((DataChangeEvent) streamResults.get(0)).after();
         Assertions.assertThat(RecordDataTestUtils.recordFields(streamRecord, recordType))
                 .isEqualTo(expectedStreamRecord);
@@ -426,8 +427,9 @@ public class MySqlFullTypesITCase extends MySqlSourceTestBase {
                 };
 
         // skip CreateTableEvent
-        List<Event> snapshotResults = fetchResults(iterator, 2);
-        RecordData snapshotRecord = ((DataChangeEvent) snapshotResults.get(1)).after();
+        List<Event> snapshotResults =
+                MySqlSourceTestUtils.fetchResultsAndCreateTableEvent(iterator, 1).f0;
+        RecordData snapshotRecord = ((DataChangeEvent) snapshotResults.get(0)).after();
         assertThat(recordFields(snapshotRecord, COMMON_TYPES)).isEqualTo(expectedSnapshot);
 
         try (Connection connection = database.getJdbcConnection();
@@ -440,7 +442,8 @@ public class MySqlFullTypesITCase extends MySqlSourceTestBase {
         expectedSnapshot[44] = BinaryStringData.fromString("{\"key1\":\"value1\"}");
         Object[] expectedStreamRecord = expectedSnapshot;
 
-        List<Event> streamResults = fetchResults(iterator, 1);
+        List<Event> streamResults =
+                MySqlSourceTestUtils.fetchResultsAndCreateTableEvent(iterator, 1).f0;
         RecordData streamRecord = ((DataChangeEvent) streamResults.get(0)).after();
         assertThat(recordFields(streamRecord, COMMON_TYPES)).isEqualTo(expectedStreamRecord);
     }
@@ -464,9 +467,10 @@ public class MySqlFullTypesITCase extends MySqlSourceTestBase {
                                 "Event-Source")
                         .executeAndCollect();
 
-        // skip CreateTableEvent
-        List<Event> snapshotResults = fetchResults(iterator, 2);
-        RecordData snapshotRecord = ((DataChangeEvent) snapshotResults.get(1)).after();
+        // skip CreateTableEvents
+        List<Event> snapshotResults =
+                MySqlSourceTestUtils.fetchResultsAndCreateTableEvent(iterator, 1).f0;
+        RecordData snapshotRecord = ((DataChangeEvent) snapshotResults.get(0)).after();
 
         assertThat(recordFields(snapshotRecord, recordType)).isEqualTo(expectedSnapshot);
 
@@ -475,7 +479,8 @@ public class MySqlFullTypesITCase extends MySqlSourceTestBase {
             statement.execute("UPDATE time_types SET time_6_c = null WHERE id = 1;");
         }
 
-        List<Event> streamResults = fetchResults(iterator, 1);
+        List<Event> streamResults =
+                MySqlSourceTestUtils.fetchResultsAndCreateTableEvent(iterator, 1).f0;
         RecordData streamRecord = ((DataChangeEvent) streamResults.get(0)).after();
         assertThat(recordFields(streamRecord, recordType)).isEqualTo(expectedStreamRecord);
     }

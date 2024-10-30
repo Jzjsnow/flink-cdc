@@ -21,10 +21,16 @@ import org.apache.flink.core.memory.DataInputViewStreamWrapper;
 import org.apache.flink.core.memory.DataOutputViewStreamWrapper;
 
 import com.ververica.cdc.common.annotation.Internal;
+import com.ververica.cdc.common.event.AddColumnEvent;
+import com.ververica.cdc.common.event.AlterColumnTypeEvent;
 import com.ververica.cdc.common.event.CreateTableEvent;
+import com.ververica.cdc.common.event.DropColumnEvent;
+import com.ververica.cdc.common.event.RenameColumnEvent;
 import com.ververica.cdc.common.event.SchemaChangeEvent;
 import com.ververica.cdc.common.event.TableId;
+import com.ververica.cdc.common.schema.Column;
 import com.ververica.cdc.common.schema.Schema;
+import com.ververica.cdc.common.types.DataType;
 import com.ververica.cdc.common.utils.SchemaUtils;
 import com.ververica.cdc.runtime.serializer.TableIdSerializer;
 import com.ververica.cdc.runtime.serializer.schema.SchemaSerializer;
@@ -37,6 +43,7 @@ import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.IOException;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.NoSuchElementException;
 import java.util.Objects;
@@ -68,6 +75,84 @@ public class SchemaManager {
 
     public SchemaManager(Map<TableId, SortedMap<Integer, Schema>> tableSchemas) {
         this.tableSchemas = tableSchemas;
+    }
+
+    /**
+     * This function checks if the given schema change event has been applied already. If so, it
+     * will be ignored to avoid sending duplicate evolved schema change events to sink metadata
+     * applier.
+     */
+    public final boolean isOriginalSchemaChangeEventRedundant(SchemaChangeEvent event) {
+        TableId tableId = event.tableId();
+        Optional<Schema> latestSchema = getLatestSchema(tableId);
+
+        if (event instanceof AddColumnEvent) {
+            AddColumnEvent addColumnEvent = (AddColumnEvent) event;
+            if (!latestSchema.isPresent()) {
+                return false;
+            }
+            List<Column> existedColumns = latestSchema.get().getColumns();
+
+            // It has been applied only if all columns are present in existedColumns
+            for (AddColumnEvent.ColumnWithPosition column : addColumnEvent.getAddedColumns()) {
+                if (!existedColumns.contains(column.getAddColumn())) {
+                    return false;
+                }
+            }
+            return true;
+        } else if (event instanceof AlterColumnTypeEvent) {
+            AlterColumnTypeEvent alterColumnTypeEvent = (AlterColumnTypeEvent) event;
+            // It has not been applied if schema does not even exist
+            if (!latestSchema.isPresent()) {
+                return false;
+            }
+            Schema schema = latestSchema.get();
+
+            // It has been applied only if all column types are set as expected
+            for (Map.Entry<String, DataType> entry :
+                    alterColumnTypeEvent.getTypeMapping().entrySet()) {
+                if (!schema.getColumn(entry.getKey()).isPresent()
+                        || !schema.getColumn(entry.getKey())
+                                .get()
+                                .getType()
+                                .equals(entry.getValue())) {
+                    return false;
+                }
+            }
+            return true;
+        } else if (event instanceof CreateTableEvent) {
+            return latestSchema.isPresent();
+        } else if (event instanceof DropColumnEvent) {
+            DropColumnEvent dropColumnEvent = (DropColumnEvent) event;
+            if (!latestSchema.isPresent()) {
+                return false;
+            }
+            List<String> existedColumnNames = latestSchema.get().getColumnNames();
+
+            // It has been applied only if corresponding column types do not exist
+            return dropColumnEvent.getDroppedColumns().stream()
+                    .map(Column::getName)
+                    .noneMatch(existedColumnNames::contains);
+        } else if (event instanceof RenameColumnEvent) {
+            RenameColumnEvent renameColumnEvent = (RenameColumnEvent) event;
+            // It has been applied if such table already exists
+            if (!latestSchema.isPresent()) {
+                return false;
+            }
+            List<String> existedColumnNames = latestSchema.get().getColumnNames();
+
+            // It has been applied only if all previous names do not exist, and all
+            // new names already exist
+            for (Map.Entry<String, String> entry : renameColumnEvent.getNameMapping().entrySet()) {
+                if (existedColumnNames.contains(entry.getKey())
+                        || !existedColumnNames.contains(entry.getValue())) {
+                    return false;
+                }
+            }
+            return true;
+        } else {
+            throw new RuntimeException("Unknown schema change event: " + event);
+        }
     }
 
     /** Check if schema exists for the specified table ID. */
@@ -171,6 +256,10 @@ public class SchemaManager {
     /** Serializer for {@link SchemaManager}. */
     public static class Serializer implements SimpleVersionedSerializer<SchemaManager> {
 
+        /**
+         * Update history: from Version 3.0.0, set to 0, from version 3.1.1, updated to 1, from
+         * version 3.2.0, updated to 2.
+         */
         public static final int CURRENT_VERSION = 0;
 
         @Override
@@ -180,61 +269,75 @@ public class SchemaManager {
 
         @Override
         public byte[] serialize(SchemaManager schemaManager) throws IOException {
-            TableIdSerializer tableIdSerializer = TableIdSerializer.INSTANCE;
-            SchemaSerializer schemaSerializer = SchemaSerializer.INSTANCE;
             try (ByteArrayOutputStream baos = new ByteArrayOutputStream();
                     DataOutputStream out = new DataOutputStream(baos)) {
-                // Number of tables
-                out.writeInt(schemaManager.tableSchemas.size());
-                for (Map.Entry<TableId, SortedMap<Integer, Schema>> tableSchema :
-                        schemaManager.tableSchemas.entrySet()) {
-                    // Table ID
-                    TableId tableId = tableSchema.getKey();
-                    tableIdSerializer.serialize(tableId, new DataOutputViewStreamWrapper(out));
+                serializeSchemaMap(schemaManager.tableSchemas, out);
 
-                    // Schema with versions
-                    SortedMap<Integer, Schema> versionedSchemas = tableSchema.getValue();
-                    out.writeInt(versionedSchemas.size());
-                    for (Map.Entry<Integer, Schema> versionedSchema : versionedSchemas.entrySet()) {
-                        // Version
-                        Integer version = versionedSchema.getKey();
-                        out.writeInt(version);
-                        // Schema
-                        Schema schema = versionedSchema.getValue();
-                        schemaSerializer.serialize(schema, new DataOutputViewStreamWrapper(out));
-                    }
-                }
                 return baos.toByteArray();
+            }
+        }
+
+        private static void serializeSchemaMap(
+                Map<TableId, SortedMap<Integer, Schema>> schemaMap, DataOutputStream out)
+                throws IOException {
+            TableIdSerializer tableIdSerializer = TableIdSerializer.INSTANCE;
+            SchemaSerializer schemaSerializer = SchemaSerializer.INSTANCE;
+            // Number of tables
+            out.writeInt(schemaMap.size());
+            for (Map.Entry<TableId, SortedMap<Integer, Schema>> tableSchema :
+                    schemaMap.entrySet()) {
+                // Table ID
+                TableId tableId = tableSchema.getKey();
+                tableIdSerializer.serialize(tableId, new DataOutputViewStreamWrapper(out));
+
+                // Schema with versions
+                SortedMap<Integer, Schema> versionedSchemas = tableSchema.getValue();
+                out.writeInt(versionedSchemas.size());
+                for (Map.Entry<Integer, Schema> versionedSchema : versionedSchemas.entrySet()) {
+                    // Version
+                    Integer version = versionedSchema.getKey();
+                    out.writeInt(version);
+                    // Schema
+                    Schema schema = versionedSchema.getValue();
+                    schemaSerializer.serialize(schema, new DataOutputViewStreamWrapper(out));
+                }
             }
         }
 
         @Override
         public SchemaManager deserialize(int version, byte[] serialized) throws IOException {
-            TableIdSerializer tableIdSerializer = TableIdSerializer.INSTANCE;
-            SchemaSerializer schemaSerializer = SchemaSerializer.INSTANCE;
             try (ByteArrayInputStream bais = new ByteArrayInputStream(serialized);
                     DataInputStream in = new DataInputStream(bais)) {
-                // Total schema length
-                int numTables = in.readInt();
-                Map<TableId, SortedMap<Integer, Schema>> tableSchemas = new HashMap<>(numTables);
-                for (int i = 0; i < numTables; i++) {
-                    // Table ID
-                    TableId tableId =
-                            tableIdSerializer.deserialize(new DataInputViewStreamWrapper(in));
-                    // Schema with versions
-                    int numVersions = in.readInt();
-                    SortedMap<Integer, Schema> versionedSchemas = new TreeMap<>(Integer::compareTo);
-                    for (int j = 0; j < numVersions; j++) {
-                        // Version
-                        int schemaVersion = in.readInt();
-                        Schema schema =
-                                schemaSerializer.deserialize(new DataInputViewStreamWrapper(in));
-                        versionedSchemas.put(schemaVersion, schema);
-                    }
-                    tableSchemas.put(tableId, versionedSchemas);
-                }
+
+                Map<TableId, SortedMap<Integer, Schema>> tableSchemas = deserializeSchemaMap(in);
+                // In legacy mode, original schema and evolved schema never differs
                 return new SchemaManager(tableSchemas);
             }
+        }
+
+        private static Map<TableId, SortedMap<Integer, Schema>> deserializeSchemaMap(
+                DataInputStream in) throws IOException {
+            TableIdSerializer tableIdSerializer = TableIdSerializer.INSTANCE;
+            SchemaSerializer schemaSerializer = SchemaSerializer.INSTANCE;
+            // Total schema length
+            int numTables = in.readInt();
+            Map<TableId, SortedMap<Integer, Schema>> tableSchemas = new HashMap<>(numTables);
+            for (int i = 0; i < numTables; i++) {
+                // Table ID
+                TableId tableId = tableIdSerializer.deserialize(new DataInputViewStreamWrapper(in));
+                // Schema with versions
+                int numVersions = in.readInt();
+                SortedMap<Integer, Schema> versionedSchemas = new TreeMap<>(Integer::compareTo);
+                for (int j = 0; j < numVersions; j++) {
+                    // Version
+                    int schemaVersion = in.readInt();
+                    Schema schema =
+                            schemaSerializer.deserialize(new DataInputViewStreamWrapper(in));
+                    versionedSchemas.put(schemaVersion, schema);
+                }
+                tableSchemas.put(tableId, versionedSchemas);
+            }
+            return tableSchemas;
         }
     }
 }

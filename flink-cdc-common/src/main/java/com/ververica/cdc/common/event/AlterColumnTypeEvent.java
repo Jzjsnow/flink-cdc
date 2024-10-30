@@ -16,6 +16,7 @@
 
 package com.ververica.cdc.common.event;
 
+import com.ververica.cdc.common.annotation.PublicEvolving;
 import com.ververica.cdc.common.types.DataType;
 
 import java.util.Map;
@@ -25,6 +26,7 @@ import java.util.Objects;
  * A {@link SchemaChangeEvent} that represents an {@code ALTER COLUMN} DDL, which may contain the
  * lenient column type changes.
  */
+@PublicEvolving
 public class AlterColumnTypeEvent implements SchemaChangeEvent {
 
     private static final long serialVersionUID = 1L;
@@ -75,5 +77,10 @@ public class AlterColumnTypeEvent implements SchemaChangeEvent {
     @Override
     public TableId tableId() {
         return tableId;
+    }
+
+    @Override
+    public SchemaChangeEventType getType() {
+        return SchemaChangeEventType.ALTER_COLUMN_TYPE;
     }
 }

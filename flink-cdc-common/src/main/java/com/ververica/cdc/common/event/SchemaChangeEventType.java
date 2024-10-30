@@ -18,14 +18,14 @@ package com.ververica.cdc.common.event;
 
 import com.ververica.cdc.common.annotation.PublicEvolving;
 
-import java.io.Serializable;
-
-/**
- * Class {@code SchemaChangeEvent} represents the changes in the table structure of the external
- * system, such as CREATE, DROP, RENAME and so on.
- */
+/** An enumeration of schema change event types for {@link SchemaChangeEvent}. */
 @PublicEvolving
-public interface SchemaChangeEvent extends ChangeEvent, Serializable {
-    /** Returns its {@link SchemaChangeEventType}. */
-    SchemaChangeEventType getType();
+public enum SchemaChangeEventType {
+    ADD_COLUMN,
+    ALTER_COLUMN_TYPE,
+    CREATE_TABLE,
+    DROP_COLUMN,
+    DROP_TABLE,
+    RENAME_COLUMN,
+    TRUNCATE_TABLE;
 }

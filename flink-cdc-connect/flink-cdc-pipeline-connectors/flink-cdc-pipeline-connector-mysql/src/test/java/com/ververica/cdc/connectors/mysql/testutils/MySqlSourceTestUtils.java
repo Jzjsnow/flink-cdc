@@ -16,13 +16,17 @@
 
 package com.ververica.cdc.connectors.mysql.testutils;
 
+import org.apache.flink.api.java.tuple.Tuple2;
+
+import com.ververica.cdc.common.event.CreateTableEvent;
+
 import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Random;
 
 /** Test utilities for MySQL event source. */
-public class MySqSourceTestUtils {
+public class MySqlSourceTestUtils {
 
     public static final String TEST_USER = "mysqluser";
     public static final String TEST_PASSWORD = "mysqlpw";
@@ -37,11 +41,27 @@ public class MySqSourceTestUtils {
         return result;
     }
 
+    public static <T> Tuple2<List<T>, List<CreateTableEvent>> fetchResultsAndCreateTableEvent(
+            Iterator<T> iter, int size) {
+        List<T> result = new ArrayList<>(size);
+        List<CreateTableEvent> createTableEvents = new ArrayList<>();
+        while (size > 0 && iter.hasNext()) {
+            T event = iter.next();
+            if (event instanceof CreateTableEvent) {
+                createTableEvents.add((CreateTableEvent) event);
+            } else {
+                result.add(event);
+                size--;
+            }
+        }
+        return Tuple2.of(result, createTableEvents);
+    }
+
     public static String getServerId(int parallelism) {
         final Random random = new Random();
         int serverId = random.nextInt(100) + 5400;
         return serverId + "-" + (serverId + parallelism);
     }
 
-    private MySqSourceTestUtils() {}
+    private MySqlSourceTestUtils() {}
 }

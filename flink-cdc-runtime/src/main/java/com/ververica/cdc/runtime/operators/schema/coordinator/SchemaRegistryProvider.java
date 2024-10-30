@@ -20,6 +20,7 @@ import org.apache.flink.runtime.jobgraph.OperatorID;
 import org.apache.flink.runtime.operators.coordination.OperatorCoordinator;
 
 import com.ververica.cdc.common.annotation.Internal;
+import com.ververica.cdc.common.pipeline.SchemaChangeBehavior;
 import com.ververica.cdc.common.sink.MetadataApplier;
 
 /** Provider of {@link SchemaRegistry}. */
@@ -30,12 +31,17 @@ public class SchemaRegistryProvider implements OperatorCoordinator.Provider {
     private final OperatorID operatorID;
     private final String operatorName;
     private final MetadataApplier metadataApplier;
+    private final SchemaChangeBehavior schemaChangeBehavior;
 
     public SchemaRegistryProvider(
-            OperatorID operatorID, String operatorName, MetadataApplier metadataApplier) {
+            OperatorID operatorID,
+            String operatorName,
+            MetadataApplier metadataApplier,
+            SchemaChangeBehavior schemaChangeBehavior) {
         this.operatorID = operatorID;
         this.operatorName = operatorName;
         this.metadataApplier = metadataApplier;
+        this.schemaChangeBehavior = schemaChangeBehavior;
     }
 
     @Override
@@ -45,6 +51,6 @@ public class SchemaRegistryProvider implements OperatorCoordinator.Provider {
 
     @Override
     public OperatorCoordinator create(OperatorCoordinator.Context context) throws Exception {
-        return new SchemaRegistry(operatorName, context, metadataApplier);
+        return new SchemaRegistry(operatorName, context, metadataApplier, schemaChangeBehavior);
     }
 }

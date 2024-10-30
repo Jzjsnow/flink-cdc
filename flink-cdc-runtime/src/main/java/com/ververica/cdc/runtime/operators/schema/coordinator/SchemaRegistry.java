@@ -24,13 +24,14 @@ import org.apache.flink.runtime.operators.coordination.OperatorEvent;
 import org.apache.flink.util.FlinkException;
 
 import com.ververica.cdc.common.event.TableId;
+import com.ververica.cdc.common.pipeline.SchemaChangeBehavior;
 import com.ververica.cdc.common.sink.MetadataApplier;
 import com.ververica.cdc.runtime.operators.schema.SchemaOperator;
 import com.ververica.cdc.runtime.operators.schema.event.FlushSuccessEvent;
 import com.ververica.cdc.runtime.operators.schema.event.GetSchemaRequest;
 import com.ververica.cdc.runtime.operators.schema.event.GetSchemaResponse;
-import com.ververica.cdc.runtime.operators.schema.event.ReleaseUpstreamRequest;
 import com.ververica.cdc.runtime.operators.schema.event.SchemaChangeRequest;
+import com.ververica.cdc.runtime.operators.schema.event.SchemaChangeResultRequest;
 import com.ververica.cdc.runtime.operators.schema.event.SinkWriterRegisterEvent;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -85,7 +86,14 @@ public class SchemaRegistry implements OperatorCoordinator, CoordinationRequestH
     private SchemaRegistryRequestHandler requestHandler;
 
     /** Schema manager for tracking schemas of all tables. */
-    private SchemaManager schemaManager = new SchemaManager();
+    private SchemaManager schemaManager;
+
+    private SchemaChangeBehavior schemaChangeBehavior;
+    /**
+     * Current parallelism. Use this to verify if Schema Registry has collected enough flush success
+     * events from sink operators.
+     */
+    private int currentParallelism;
 
     public SchemaRegistry(
             String operatorName,
@@ -96,14 +104,34 @@ public class SchemaRegistry implements OperatorCoordinator, CoordinationRequestH
         this.failedReasons = new HashMap<>();
         this.metadataApplier = metadataApplier;
         schemaManager = new SchemaManager();
-        requestHandler = new SchemaRegistryRequestHandler(metadataApplier, schemaManager);
+        requestHandler =
+                new SchemaRegistryRequestHandler(
+                        metadataApplier, schemaManager, SchemaChangeBehavior.EVOLVE);
+    }
+
+    public SchemaRegistry(
+            String operatorName,
+            OperatorCoordinator.Context context,
+            MetadataApplier metadataApplier,
+            SchemaChangeBehavior schemaChangeBehavior) {
+        this.context = context;
+        this.operatorName = operatorName;
+        this.failedReasons = new HashMap<>();
+        this.metadataApplier = metadataApplier;
+        this.schemaManager = new SchemaManager();
+        this.requestHandler =
+                new SchemaRegistryRequestHandler(
+                        metadataApplier, schemaManager, schemaChangeBehavior);
+        this.schemaChangeBehavior = schemaChangeBehavior;
     }
 
     @Override
     public void start() throws Exception {
         LOG.info("Starting SchemaRegistry for {}.", operatorName);
         this.failedReasons.clear();
-        LOG.info("Started SchemaRegistry for {}.", operatorName);
+        this.currentParallelism = context.currentParallelism();
+        LOG.info(
+                "Started SchemaRegistry for {}. Parallelism: {}", operatorName, currentParallelism);
     }
 
     @Override
@@ -121,7 +149,9 @@ public class SchemaRegistry implements OperatorCoordinator, CoordinationRequestH
                     flushSuccessEvent.getSubtask(),
                     flushSuccessEvent.getTableId().toString());
             requestHandler.flushSuccess(
-                    flushSuccessEvent.getTableId(), flushSuccessEvent.getSubtask());
+                    flushSuccessEvent.getTableId(),
+                    flushSuccessEvent.getSubtask(),
+                    currentParallelism);
         } else if (event instanceof SinkWriterRegisterEvent) {
             requestHandler.registerSinkWriter(((SinkWriterRegisterEvent) event).getSubtask());
         } else {
@@ -152,16 +182,22 @@ public class SchemaRegistry implements OperatorCoordinator, CoordinationRequestH
     @Override
     public CompletableFuture<CoordinationResponse> handleCoordinationRequest(
             CoordinationRequest request) {
-        if (request instanceof SchemaChangeRequest) {
-            SchemaChangeRequest schemaChangeRequest = (SchemaChangeRequest) request;
-            return requestHandler.handleSchemaChangeRequest(schemaChangeRequest);
-        } else if (request instanceof ReleaseUpstreamRequest) {
-            return requestHandler.handleReleaseUpstreamRequest();
-        } else if (request instanceof GetSchemaRequest) {
-            return CompletableFuture.completedFuture(
-                    wrap(handleGetSchemaRequest(((GetSchemaRequest) request))));
-        } else {
-            throw new IllegalArgumentException("Unrecognized CoordinationRequest type: " + request);
+        try {
+            if (request instanceof SchemaChangeRequest) {
+                SchemaChangeRequest schemaChangeRequest = (SchemaChangeRequest) request;
+                return requestHandler.handleSchemaChangeRequest(schemaChangeRequest);
+            } else if (request instanceof SchemaChangeResultRequest) {
+                return requestHandler.getSchemaChangeResult();
+            } else if (request instanceof GetSchemaRequest) {
+                return CompletableFuture.completedFuture(
+                        wrap(handleGetSchemaRequest(((GetSchemaRequest) request))));
+            } else {
+                throw new IllegalArgumentException(
+                        "Unrecognized CoordinationRequest type: " + request);
+            }
+        } catch (Throwable t) {
+            context.failJob(t);
+            throw t;
         }
     }
 
@@ -180,7 +216,10 @@ public class SchemaRegistry implements OperatorCoordinator, CoordinationRequestH
             schemaManager =
                     SchemaManager.SERIALIZER.deserialize(
                             schemaManagerSerializerVersion, serializedSchemaManager);
-            requestHandler = new SchemaRegistryRequestHandler(metadataApplier, schemaManager);
+
+            requestHandler =
+                    new SchemaRegistryRequestHandler(
+                            metadataApplier, schemaManager, schemaChangeBehavior);
         }
     }
 

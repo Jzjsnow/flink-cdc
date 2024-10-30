@@ -77,4 +77,9 @@ public class DropColumnEvent implements SchemaChangeEvent {
     public TableId tableId() {
         return tableId;
     }
+
+    @Override
+    public SchemaChangeEventType getType() {
+        return SchemaChangeEventType.DROP_COLUMN;
+    }
 }

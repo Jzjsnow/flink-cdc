@@ -33,7 +33,7 @@ import static org.apache.flink.streaming.api.environment.ExecutionCheckpointingO
 /** Predefined pipeline configuration options. */
 @PublicEvolving
 public class PipelineOptions {
-
+    public static final Duration DEFAULT_SCHEMA_OPERATOR_RPC_TIMEOUT = Duration.ofMinutes(3);
     public static final ConfigOption<String> PIPELINE_NAME =
             ConfigOptions.key("name")
                     .stringType()
@@ -138,6 +138,12 @@ public class PipelineOptions {
                                             TextElement.code(MIN_PAUSE_BETWEEN_CHECKPOINTS.key()))
                                     .build()
                                     .toString());
+    public static final ConfigOption<Duration> PIPELINE_SCHEMA_OPERATOR_RPC_TIMEOUT =
+            ConfigOptions.key("schema-operator.rpc-timeout")
+                    .durationType()
+                    .defaultValue(DEFAULT_SCHEMA_OPERATOR_RPC_TIMEOUT)
+                    .withDescription(
+                            "The timeout time for SchemaOperator to wait downstream SchemaChangeEvent applying finished, the default value is 3 minutes.");
 
     private PipelineOptions() {}
 }

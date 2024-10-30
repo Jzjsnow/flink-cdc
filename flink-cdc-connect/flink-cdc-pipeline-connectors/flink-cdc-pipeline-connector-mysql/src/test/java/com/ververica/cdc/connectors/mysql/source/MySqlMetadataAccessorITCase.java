@@ -42,8 +42,8 @@ import java.util.List;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
-import static com.ververica.cdc.connectors.mysql.testutils.MySqSourceTestUtils.TEST_PASSWORD;
-import static com.ververica.cdc.connectors.mysql.testutils.MySqSourceTestUtils.TEST_USER;
+import static com.ververica.cdc.connectors.mysql.testutils.MySqlSourceTestUtils.TEST_PASSWORD;
+import static com.ververica.cdc.connectors.mysql.testutils.MySqlSourceTestUtils.TEST_USER;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 

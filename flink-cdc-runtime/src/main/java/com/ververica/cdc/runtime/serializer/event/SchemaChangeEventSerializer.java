@@ -28,6 +28,7 @@ import com.ververica.cdc.common.event.CreateTableEvent;
 import com.ververica.cdc.common.event.DropColumnEvent;
 import com.ververica.cdc.common.event.RenameColumnEvent;
 import com.ververica.cdc.common.event.SchemaChangeEvent;
+import com.ververica.cdc.common.event.SchemaChangeEventType;
 import com.ververica.cdc.common.event.TableId;
 import com.ververica.cdc.runtime.serializer.EnumSerializer;
 import com.ververica.cdc.runtime.serializer.TypeSerializerSingleton;
@@ -50,9 +51,25 @@ public final class SchemaChangeEventSerializer extends TypeSerializerSingleton<S
         return false;
     }
 
+    /**
+     * Create a new {@link SchemaChangeEvent} instance with a default value of NULL for {@link
+     * SchemaChangeEventType} (getType() returns NULL).
+     *
+     * @return {@link SchemaChangeEvent}
+     */
     @Override
     public SchemaChangeEvent createInstance() {
-        return () -> TableId.tableId("unknown", "unknown", "unknown");
+        return new SchemaChangeEvent() {
+            @Override
+            public SchemaChangeEventType getType() {
+                return null;
+            }
+
+            @Override
+            public TableId tableId() {
+                return TableId.tableId("unknown", "unknown", "unknown");
+            }
+        };
     }
 
     @Override

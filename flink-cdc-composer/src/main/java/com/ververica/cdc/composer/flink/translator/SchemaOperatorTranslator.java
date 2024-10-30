@@ -27,6 +27,8 @@ import com.ververica.cdc.common.sink.MetadataApplier;
 import com.ververica.cdc.runtime.operators.schema.SchemaOperatorFactory;
 import com.ververica.cdc.runtime.typeutils.EventTypeInfo;
 
+import java.time.Duration;
+
 /**
  * Translator for building {@link com.ververica.cdc.runtime.operators.schema.SchemaOperator} into
  * DataStream.
@@ -35,27 +37,20 @@ import com.ververica.cdc.runtime.typeutils.EventTypeInfo;
 public class SchemaOperatorTranslator {
     private final SchemaChangeBehavior schemaChangeBehavior;
     private final String schemaOperatorUid;
+    private final Duration rpcTimeOut;
 
     public SchemaOperatorTranslator(
-            SchemaChangeBehavior schemaChangeBehavior, String schemaOperatorUid) {
+            SchemaChangeBehavior schemaChangeBehavior,
+            String schemaOperatorUid,
+            Duration rpcTimeOut) {
         this.schemaChangeBehavior = schemaChangeBehavior;
         this.schemaOperatorUid = schemaOperatorUid;
+        this.rpcTimeOut = rpcTimeOut;
     }
 
     public DataStream<Event> translate(
             DataStream<Event> input, int parallelism, MetadataApplier metadataApplier) {
-        switch (schemaChangeBehavior) {
-            case EVOLVE:
-                return addSchemaOperator(input, parallelism, metadataApplier);
-            case IGNORE:
-                return dropSchemaChangeEvent(input, parallelism);
-            case EXCEPTION:
-                return exceptionOnSchemaChange(input, parallelism);
-            default:
-                throw new IllegalArgumentException(
-                        String.format(
-                                "Unrecognized schema change behavior: %s", schemaChangeBehavior));
-        }
+        return addSchemaOperator(input, parallelism, metadataApplier, schemaChangeBehavior);
     }
 
     public String getSchemaOperatorUid() {
@@ -63,12 +58,16 @@ public class SchemaOperatorTranslator {
     }
 
     private DataStream<Event> addSchemaOperator(
-            DataStream<Event> input, int parallelism, MetadataApplier metadataApplier) {
+            DataStream<Event> input,
+            int parallelism,
+            MetadataApplier metadataApplier,
+            SchemaChangeBehavior schemaChangeBehavior) {
         SingleOutputStreamOperator<Event> stream =
                 input.transform(
                         "SchemaOperator",
                         new EventTypeInfo(),
-                        new SchemaOperatorFactory(metadataApplier));
+                        new SchemaOperatorFactory(
+                                metadataApplier, rpcTimeOut, schemaChangeBehavior));
         stream.uid(schemaOperatorUid).setParallelism(parallelism);
         return stream;
     }

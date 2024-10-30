@@ -34,8 +34,8 @@ import static com.ververica.cdc.connectors.mysql.source.MySqlDataSourceOptions.P
 import static com.ververica.cdc.connectors.mysql.source.MySqlDataSourceOptions.SCAN_INCREMENTAL_SNAPSHOT_CHUNK_KEY_COLUMN;
 import static com.ververica.cdc.connectors.mysql.source.MySqlDataSourceOptions.TABLES;
 import static com.ververica.cdc.connectors.mysql.source.MySqlDataSourceOptions.USERNAME;
-import static com.ververica.cdc.connectors.mysql.testutils.MySqSourceTestUtils.TEST_PASSWORD;
-import static com.ververica.cdc.connectors.mysql.testutils.MySqSourceTestUtils.TEST_USER;
+import static com.ververica.cdc.connectors.mysql.testutils.MySqlSourceTestUtils.TEST_PASSWORD;
+import static com.ververica.cdc.connectors.mysql.testutils.MySqlSourceTestUtils.TEST_USER;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 

@@ -22,6 +22,7 @@ import com.ververica.cdc.common.event.CreateTableEvent;
 import com.ververica.cdc.common.event.DropColumnEvent;
 import com.ververica.cdc.common.event.RenameColumnEvent;
 import com.ververica.cdc.common.event.SchemaChangeEvent;
+import com.ververica.cdc.common.event.SchemaChangeEventType;
 import com.ververica.cdc.common.schema.Column;
 import com.ververica.cdc.common.sink.MetadataApplier;
 import com.ververica.cdc.common.types.DataType;
@@ -31,6 +32,7 @@ import com.ververica.cdc.common.types.TimestampType;
 import com.ververica.cdc.common.types.VarCharType;
 import com.ververica.cdc.common.types.ZonedTimestampType;
 import com.ververica.cdc.connectors.iceberg.utils.IcebergUtils;
+import org.apache.commons.compress.utils.Sets;
 import org.apache.iceberg.Table;
 import org.apache.iceberg.UpdateSchema;
 import org.apache.iceberg.catalog.TableIdentifier;
@@ -44,14 +46,23 @@ import org.slf4j.LoggerFactory;
 import java.io.IOException;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
+
+import static com.ververica.cdc.common.event.SchemaChangeEventType.ADD_COLUMN;
+import static com.ververica.cdc.common.event.SchemaChangeEventType.ALTER_COLUMN_TYPE;
+import static com.ververica.cdc.common.event.SchemaChangeEventType.CREATE_TABLE;
+import static com.ververica.cdc.common.event.SchemaChangeEventType.DROP_COLUMN;
+import static com.ververica.cdc.common.event.SchemaChangeEventType.RENAME_COLUMN;
 
 /** Supports {@link IcebergDataSink} to schema evolution. */
 public class IcebergMetadataApplier implements MetadataApplier {
     private static final Logger LOG = LoggerFactory.getLogger(IcebergMetadataApplier.class);
     private com.ververica.cdc.common.configuration.Configuration config;
+    private final Set<SchemaChangeEventType> enabledSchemaEvolutionTypes;
 
     public IcebergMetadataApplier(com.ververica.cdc.common.configuration.Configuration config) {
         this.config = config;
+        this.enabledSchemaEvolutionTypes = getSupportedSchemaEvolutionTypes();
     }
 
     @Override
@@ -75,7 +86,7 @@ public class IcebergMetadataApplier implements MetadataApplier {
                                     config.getOptional(IcebergDataSinkOptions.DATABASE).get(),
                                     config.getOptional(IcebergDataSinkOptions.TABLENAME).get()));
             UpdateSchema newSchema = table.updateSchema();
-            // send schema change op to doris
+            // send schema change op to iceberg
             if (event instanceof CreateTableEvent) {
                 LOG.info("it's not support table automatic creation now!");
                 return;
@@ -96,7 +107,7 @@ public class IcebergMetadataApplier implements MetadataApplier {
                 applyRenameColumnEvent((RenameColumnEvent) event, newSchema);
             } else if (event instanceof AlterColumnTypeEvent) {
                 LOG.info(
-                        "table schema change: drop column operation!columns={}",
+                        "table schema change: alter column operation!columns={}",
                         ((AlterColumnTypeEvent) event).getTypeMapping());
                 applyAlterColumnTypeEvent((AlterColumnTypeEvent) event, newSchema);
             } else {
@@ -159,5 +170,16 @@ public class IcebergMetadataApplier implements MetadataApplier {
                 newSchema.updateColumn(key, Types.StringType.get()).commit();
             }
         }
+    }
+
+    @Override
+    public boolean acceptsSchemaEvolutionType(SchemaChangeEventType schemaChangeEventType) {
+        return enabledSchemaEvolutionTypes.contains(schemaChangeEventType);
+    }
+
+    @Override
+    public Set<SchemaChangeEventType> getSupportedSchemaEvolutionTypes() {
+        return Sets.newHashSet(
+                CREATE_TABLE, ADD_COLUMN, ALTER_COLUMN_TYPE, DROP_COLUMN, RENAME_COLUMN);
     }
 }

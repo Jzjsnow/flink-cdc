@@ -16,16 +16,16 @@
 
 package com.ververica.cdc.runtime.operators.schema.event;
 
-import org.apache.flink.runtime.operators.coordination.CoordinationResponse;
+import org.apache.flink.runtime.operators.coordination.CoordinationRequest;
 
 import com.ververica.cdc.runtime.operators.schema.SchemaOperator;
 import com.ververica.cdc.runtime.operators.schema.coordinator.SchemaRegistry;
 
 /**
- * The response for {@link ReleaseUpstreamRequest} from {@link SchemaRegistry} to {@link
- * SchemaOperator}.
+ * request from {@link SchemaOperator} to {@link SchemaRegistry} for getting result of applying
+ * schema change.
  */
-public class ReleaseUpstreamResponse implements CoordinationResponse {
+public class SchemaChangeResultRequest implements CoordinationRequest {
 
     private static final long serialVersionUID = 1L;
 }

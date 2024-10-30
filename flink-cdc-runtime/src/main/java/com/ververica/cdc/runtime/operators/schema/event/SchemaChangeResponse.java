@@ -18,9 +18,12 @@ package com.ververica.cdc.runtime.operators.schema.event;
 
 import org.apache.flink.runtime.operators.coordination.CoordinationResponse;
 
+import com.ververica.cdc.common.event.SchemaChangeEvent;
 import com.ververica.cdc.runtime.operators.schema.SchemaOperator;
 import com.ververica.cdc.runtime.operators.schema.coordinator.SchemaRegistry;
 
+import java.util.Collections;
+import java.util.List;
 import java.util.Objects;
 
 /**
@@ -34,14 +37,50 @@ public class SchemaChangeResponse implements CoordinationResponse {
      * Whether the SchemaOperator need to buffer data and the SchemaOperatorCoordinator need to wait
      * for flushing.
      */
-    private final boolean shouldSendFlushEvent;
+    private final List<SchemaChangeEvent> schemaChangeEvents;
 
-    public SchemaChangeResponse(boolean shouldSendFlushEvent) {
-        this.shouldSendFlushEvent = shouldSendFlushEvent;
+    private final ResponseCode responseCode;
+
+    public static SchemaChangeResponse accepted(List<SchemaChangeEvent> schemaChangeEvents) {
+        return new SchemaChangeResponse(schemaChangeEvents, ResponseCode.ACCEPTED);
     }
 
-    public boolean isShouldSendFlushEvent() {
-        return shouldSendFlushEvent;
+    public static SchemaChangeResponse busy() {
+        return new SchemaChangeResponse(Collections.emptyList(), ResponseCode.BUSY);
+    }
+
+    public static SchemaChangeResponse duplicate() {
+        return new SchemaChangeResponse(Collections.emptyList(), ResponseCode.DUPLICATE);
+    }
+
+    public static SchemaChangeResponse ignored() {
+        return new SchemaChangeResponse(Collections.emptyList(), ResponseCode.IGNORED);
+    }
+
+    private SchemaChangeResponse(
+            List<SchemaChangeEvent> schemaChangeEvents, ResponseCode responseCode) {
+        this.schemaChangeEvents = schemaChangeEvents;
+        this.responseCode = responseCode;
+    }
+
+    public boolean isAccepted() {
+        return ResponseCode.ACCEPTED.equals(responseCode);
+    }
+
+    public boolean isRegistryBusy() {
+        return ResponseCode.BUSY.equals(responseCode);
+    }
+
+    public boolean isDuplicate() {
+        return ResponseCode.DUPLICATE.equals(responseCode);
+    }
+
+    public boolean isIgnored() {
+        return ResponseCode.IGNORED.equals(responseCode);
+    }
+
+    public List<SchemaChangeEvent> getSchemaChangeEvents() {
+        return schemaChangeEvents;
     }
 
     @Override
@@ -53,11 +92,43 @@ public class SchemaChangeResponse implements CoordinationResponse {
             return false;
         }
         SchemaChangeResponse response = (SchemaChangeResponse) o;
-        return shouldSendFlushEvent == response.shouldSendFlushEvent;
+        return Objects.equals(schemaChangeEvents, response.schemaChangeEvents)
+                && responseCode == response.responseCode;
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(shouldSendFlushEvent);
+        return Objects.hash(schemaChangeEvents, responseCode);
+    }
+
+    @Override
+    public String toString() {
+        return "SchemaChangeResponse{"
+                + "schemaChangeEvents="
+                + schemaChangeEvents
+                + ", responseCode="
+                + responseCode
+                + '}';
+    }
+
+    /**
+     * Schema Change Response status code.
+     *
+     * <p>- Accepted: Requested schema change request has been accepted exclusively. Any other
+     * schema change requests will be blocked.
+     *
+     * <p>- Busy: Schema registry is currently busy processing another schema change request.
+     *
+     * <p>- Duplicate: This schema change request has been submitted before, possibly by another
+     * paralleled subTask.
+     *
+     * <p>- Ignored: This schema change request has been assessed, but no actual evolution is
+     * required. Possibly caused by LENIENT mode or merging table strategies.
+     */
+    public enum ResponseCode {
+        ACCEPTED,
+        BUSY,
+        DUPLICATE,
+        IGNORED
     }
 }

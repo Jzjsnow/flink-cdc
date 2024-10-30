@@ -18,8 +18,13 @@ package com.ververica.cdc.common.sink;
 
 import com.ververica.cdc.common.annotation.PublicEvolving;
 import com.ververica.cdc.common.event.SchemaChangeEvent;
+import com.ververica.cdc.common.event.SchemaChangeEventType;
+import com.ververica.cdc.common.event.SchemaChangeEventTypeFamily;
 
 import java.io.Serializable;
+import java.util.Arrays;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 /** {@code MetadataApplier} is used to apply metadata changes to external systems. */
 @PublicEvolving
@@ -27,4 +32,14 @@ public interface MetadataApplier extends Serializable {
 
     /** Apply the given {@link SchemaChangeEvent} to external systems. */
     void applySchemaChange(SchemaChangeEvent schemaChangeEvent);
+
+    /** Checks if this metadata applier should this event type. */
+    default boolean acceptsSchemaEvolutionType(SchemaChangeEventType schemaChangeEventType) {
+        return true;
+    }
+
+    /** Checks what kind of schema change events downstream can handle. */
+    default Set<SchemaChangeEventType> getSupportedSchemaEvolutionTypes() {
+        return Arrays.stream(SchemaChangeEventTypeFamily.ALL).collect(Collectors.toSet());
+    }
 }
