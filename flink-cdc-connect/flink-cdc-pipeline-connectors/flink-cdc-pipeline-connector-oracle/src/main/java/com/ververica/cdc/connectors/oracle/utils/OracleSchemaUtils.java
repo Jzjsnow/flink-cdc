@@ -187,7 +187,10 @@ public class OracleSchemaUtils {
                 break;
             case "NUMBER":
                 dataType =
-                        new DecimalType(columnInfo.getDataPrecision(), columnInfo.getDataScale());
+                        columnInfo.getDataPrecision() == null || columnInfo.getDataPrecision() == 0
+                                ? new DecimalType()
+                                : new DecimalType(
+                                        columnInfo.getDataPrecision(), columnInfo.getDataScale());
                 break;
             case "LONG":
                 dataType = new BigIntType();

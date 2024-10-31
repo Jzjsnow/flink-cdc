@@ -47,7 +47,7 @@
         <dependency>
             <groupId>io.debezium</groupId>
             <artifactId>debezium-core</artifactId>
-            <version>1.9.0-RELEASE</version>
+            <version>1.9.7.Final-RELEASE</version>
         </dependency>
         <dependency>
             <groupId>io.debezium</groupId>

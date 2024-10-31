@@ -579,12 +579,12 @@ public class OracleConnection extends JdbcConnection {
      */
     public Optional<Instant> getScnToTimestamp(Scn scn) throws SQLException {
         try {
-            return queryAndMap(
-                    "SELECT scn_to_timestamp('" + scn + "') FROM DUAL",
-                    rs ->
-                            rs.next()
-                                    ? Optional.of(rs.getTimestamp(1).toInstant())
-                                    : Optional.empty());
+
+            PreparedStatement statement =
+                    createPreparedStatement("SELECT scn_to_timestamp('?') FROM DUAL");
+            statement.setString(1, scn.toString());
+            ResultSet rs = statement.executeQuery();
+            return rs.next() ? Optional.of(rs.getTimestamp(1).toInstant()) : Optional.empty();
         } catch (SQLException e) {
             if (e.getMessage().startsWith("ORA-08181")) {
                 // ORA-08181 specified number is not a valid system change number
