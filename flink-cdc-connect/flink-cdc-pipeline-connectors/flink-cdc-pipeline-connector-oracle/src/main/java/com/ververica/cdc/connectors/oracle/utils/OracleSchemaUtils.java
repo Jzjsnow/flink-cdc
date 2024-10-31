@@ -40,13 +40,12 @@ import org.slf4j.LoggerFactory;
 import javax.annotation.Nullable;
 
 import java.sql.SQLException;
+import java.sql.Statement;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Locale;
 import java.util.stream.Collectors;
-
-import static com.ververica.cdc.connectors.oracle.source.utils.OracleUtils.quote;
 
 /** Utilities for converting from debezium {@link Table} types to {@link Schema}. */
 public class OracleSchemaUtils {
@@ -82,34 +81,39 @@ public class OracleSchemaUtils {
         // READ DATABASE NAMES
         // -------------------
         // Get the list of databases ...
-        LOG.info("Read list of available databases");
-        final List<String> databaseNames = new ArrayList<>();
+        // Oracle doesn't have the concept of multiple databases in the same way as MySQL.
+        // Instead, we typically refer to schemas. Here, we can list schemas.
+        // Get the list of schemas ...
+        LOG.info("Read list of available schemas");
+        final List<String> schemaNames = new ArrayList<>();
         jdbc.query(
-                "SHOW DATABASES WHERE `database` NOT IN ('information_schema', 'mysql', 'performance_schema', 'sys')",
+                "SELECT username FROM all_users",
                 rs -> {
                     while (rs.next()) {
-                        databaseNames.add(rs.getString(1));
+                        schemaNames.add(rs.getString(1));
                     }
                 });
-        LOG.info("\t list of available databases are: {}", databaseNames);
-        return databaseNames;
+        LOG.info("\t list of available databases are: {}", schemaNames);
+        return schemaNames;
     }
 
-    public static List<TableId> listTables(JdbcConnection jdbc, String dbName) throws SQLException {
+    public static List<TableId> listTables(JdbcConnection jdbc, String schemaName)
+            throws SQLException {
         // ----------------
         // READ TABLE NAMES
         // ----------------
-        // Get the list of table IDs for each database. We can't use a prepared statement with
-        // MySQL, so we have to build the SQL statement each time. Although in other cases this
-        // might lead to SQL injection, in our case we are reading the database names from the
-        // database and not taking them from the user ...
-        LOG.info("Read list of available tables in {}", dbName);
+        // Get the list of table IDs for each schema.
+        LOG.info("Read list of available tables in {}", schemaName);
         final List<TableId> tableIds = new ArrayList<>();
         jdbc.query(
-                "SHOW FULL TABLES IN " + quote(dbName) + " where Table_Type = 'BASE TABLE'",
+                "SELECT table_name FROM all_tables WHERE owner ='" + schemaName.toUpperCase() + "'",
+                statementFactory -> {
+                    Statement statement = statementFactory.createStatement();
+                    return statement;
+                },
                 rs -> {
                     while (rs.next()) {
-                        tableIds.add(TableId.tableId(dbName, rs.getString(1)));
+                        tableIds.add(TableId.tableId(schemaName, rs.getString(1)));
                     }
                 });
         LOG.info("\t list of available tables are: {}", tableIds);
@@ -120,9 +124,9 @@ public class OracleSchemaUtils {
         try {
             // fetch table schemas
             JdbcConnection jdbc = DebeziumUtils.createOracleConnection(sourceConfig);
-            OracleSchema mySqlSchema = new OracleSchema();
+            OracleSchema oracleSchema = new OracleSchema();
             TableChanges.TableChange tableSchema =
-                    mySqlSchema.getTableSchema(jdbc, toDbzTableId(tableId));
+                    oracleSchema.getTableSchema(jdbc, toDbzTableId(tableId));
             return toSchema(tableSchema.getTable());
         } catch (Exception e) {
             throw new RuntimeException("Error to get table schema: " + e.getMessage(), e);

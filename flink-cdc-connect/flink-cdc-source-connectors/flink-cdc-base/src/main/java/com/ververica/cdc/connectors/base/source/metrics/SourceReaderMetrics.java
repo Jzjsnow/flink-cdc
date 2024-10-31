@@ -29,6 +29,7 @@ public class SourceReaderMetrics {
     private final SourceReaderMetricGroup metricGroup;
     private static final String METRIC_NAME_FORMAT = "%s_%s";
     private static final String FLINK_CDC_SOURCE_POSTGRES = "flinkCDC_Source_Postgres";
+    private static final String FLINK_CDC_SOURCE_ORACLE = "flinkCDC_Source_Oracle";
 
     /**
      * currentFetchEventTimeLag = FetchTime - messageTimestamp, where the FetchTime is the time the
@@ -93,6 +94,26 @@ public class SourceReaderMetrics {
                 String.format(
                         METRIC_NAME_FORMAT,
                         FLINK_CDC_SOURCE_POSTGRES,
+                        MetricNames.IO_NUM_BYTES_IN_RATE),
+                (Gauge<Double>) this::getNumBytesInRate);
+        metricGroup.gauge(
+                String.format(
+                        METRIC_NAME_FORMAT, FLINK_CDC_SOURCE_ORACLE, MetricNames.IO_NUM_RECORDS_IN),
+                (Gauge<Double>) this::getNumRecordsIn);
+        metricGroup.gauge(
+                String.format(
+                        METRIC_NAME_FORMAT, FLINK_CDC_SOURCE_ORACLE, MetricNames.IO_NUM_BYTES_IN),
+                (Gauge<Double>) this::getNumBytesIn);
+        metricGroup.gauge(
+                String.format(
+                        METRIC_NAME_FORMAT,
+                        FLINK_CDC_SOURCE_ORACLE,
+                        MetricNames.IO_NUM_RECORDS_IN_RATE),
+                (Gauge<Double>) this::getNumRecordsInRate);
+        metricGroup.gauge(
+                String.format(
+                        METRIC_NAME_FORMAT,
+                        FLINK_CDC_SOURCE_ORACLE,
                         MetricNames.IO_NUM_BYTES_IN_RATE),
                 (Gauge<Double>) this::getNumBytesInRate);
     }

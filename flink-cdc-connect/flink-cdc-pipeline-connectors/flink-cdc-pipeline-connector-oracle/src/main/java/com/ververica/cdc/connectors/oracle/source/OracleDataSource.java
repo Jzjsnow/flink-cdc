@@ -62,6 +62,7 @@ public class OracleDataSource implements DataSource, SupportsReadingMetadata {
     private static final String DEBEZIUM_PROPERTIES_PREFIX = "debezium.";
     private final OracleSourceConfig sourceConfig;
     private final Configuration config;
+    private String[] capturedTables;
 
     // --------------------------------------------------------------------------------------------
     // Mutable attributes
@@ -73,10 +74,14 @@ public class OracleDataSource implements DataSource, SupportsReadingMetadata {
     /** Metadata that is appended at the end of a physical source row. */
     protected List<String> metadataKeys;
 
-    public OracleDataSource(OracleSourceConfigFactory configFactory, Configuration config) {
+    public OracleDataSource(
+            OracleSourceConfigFactory configFactory,
+            Configuration config,
+            String[] capturedTables) {
         this.sourceConfig = configFactory.create(0);
         this.config = config;
         this.metadataKeys = Collections.emptyList();
+        this.capturedTables = capturedTables;
     }
 
     @Override
@@ -136,7 +141,7 @@ public class OracleDataSource implements DataSource, SupportsReadingMetadata {
                             .port(port)
                             .databaseList(database)
                             .schemaList(schemaName)
-                            .tableList(tableName)
+                            .tableList(capturedTables)
                             .username(username)
                             .password(password)
                             .startupOptions(startupOptions)
@@ -173,9 +178,7 @@ public class OracleDataSource implements DataSource, SupportsReadingMetadata {
                             .schemaList(
                                     config.getOptional(OracleDataSourceOptions.SCHEMALIST)
                                             .get()) // monitor  schema
-                            .tableList(
-                                    config.getOptional(OracleDataSourceOptions.TABLES)
-                                            .get()) // monitor
+                            .tableList(capturedTables) // monitor
                             // EMP table
                             .username(config.getOptional(OracleDataSourceOptions.USERNAME).get())
                             .password(config.getOptional(OracleDataSourceOptions.PASSWORD).get())

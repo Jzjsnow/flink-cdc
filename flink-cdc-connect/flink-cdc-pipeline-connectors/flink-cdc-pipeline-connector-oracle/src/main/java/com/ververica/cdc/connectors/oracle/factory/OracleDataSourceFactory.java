@@ -21,13 +21,17 @@ import org.apache.flink.table.api.ValidationException;
 import com.ververica.cdc.common.annotation.Internal;
 import com.ververica.cdc.common.configuration.ConfigOption;
 import com.ververica.cdc.common.configuration.Configuration;
+import com.ververica.cdc.common.event.TableId;
 import com.ververica.cdc.common.factories.DataSourceFactory;
 import com.ververica.cdc.common.factories.Factory;
+import com.ververica.cdc.common.schema.Selectors;
 import com.ververica.cdc.common.source.DataSource;
 import com.ververica.cdc.connectors.base.options.StartupOptions;
 import com.ververica.cdc.connectors.oracle.source.OracleDataSource;
 import com.ververica.cdc.connectors.oracle.source.OracleDataSourceOptions;
+import com.ververica.cdc.connectors.oracle.source.config.OracleSourceConfig;
 import com.ververica.cdc.connectors.oracle.source.config.OracleSourceConfigFactory;
+import com.ververica.cdc.connectors.oracle.utils.OracleSchemaUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -45,7 +49,7 @@ public class OracleDataSourceFactory implements DataSourceFactory {
     private static final Logger LOG = LoggerFactory.getLogger(OracleDataSourceFactory.class);
 
     public static final String IDENTIFIER = "oracle";
-    public static final String COMM = ",";
+    private String[] capturedTables;
 
     @Override
     public DataSource createDataSource(Context context) {
@@ -60,6 +64,7 @@ public class OracleDataSourceFactory implements DataSourceFactory {
                 config.get(OracleDataSourceOptions.CHUNK_KEY_EVEN_DISTRIBUTION_FACTOR_LOWER_BOUND);
         int connectMaxRetries = config.get(OracleDataSourceOptions.CONNECT_MAX_RETRIES);
         int connectionPoolSize = config.get(OracleDataSourceOptions.CONNECTION_POOL_SIZE);
+        String tables = config.get(OracleDataSourceOptions.TABLES);
         validateIntegerOption(
                 OracleDataSourceOptions.SCAN_INCREMENTAL_SNAPSHOT_CHUNK_SIZE, splitSize, 1);
         validateIntegerOption(OracleDataSourceOptions.CHUNK_META_GROUP_SIZE, splitMetaGroupSize, 1);
@@ -86,21 +91,29 @@ public class OracleDataSourceFactory implements DataSourceFactory {
                                 .password(
                                         config.getOptional(OracleDataSourceOptions.PASSWORD).get())
                                 .includeSchemaChanges(true);
-        configFactory.tableList(
-                config.getOptional(OracleDataSourceOptions.TABLES).get().split(COMM));
+        Selectors selectors = new Selectors.SelectorsBuilder().includeTables(tables).build();
+        String[] capturedTables = getTableList(configFactory.create(0), selectors);
+        if (capturedTables.length == 0) {
+            throw new IllegalArgumentException(
+                    "Cannot find any table by the option 'tables' = " + tables);
+        }
+        configFactory.tableList(capturedTables);
         configFactory.databaseList(config.getOptional(OracleDataSourceOptions.DATABASE).get());
         configFactory.schemaList(
-                new String[] {config.getOptional(OracleDataSourceOptions.DATABASE).get()});
+                new String[] {config.getOptional(OracleDataSourceOptions.SCHEMALIST).get()});
 
-        return new OracleDataSource(configFactory, config);
+        return new OracleDataSource(configFactory, config, capturedTables);
     }
 
     @Override
     public Set<ConfigOption<?>> requiredOptions() {
         Set<ConfigOption<?>> options = new HashSet<>();
         options.add(OracleDataSourceOptions.HOSTNAME);
+        options.add(OracleDataSourceOptions.PORT);
         options.add(OracleDataSourceOptions.USERNAME);
         options.add(OracleDataSourceOptions.PASSWORD);
+        options.add(OracleDataSourceOptions.SCHEMALIST);
+        options.add(OracleDataSourceOptions.DATABASE);
         options.add(OracleDataSourceOptions.TABLES);
         return options;
     }
@@ -108,7 +121,6 @@ public class OracleDataSourceFactory implements DataSourceFactory {
     @Override
     public Set<ConfigOption<?>> optionalOptions() {
         Set<ConfigOption<?>> options = new HashSet<>();
-        options.add(OracleDataSourceOptions.PORT);
         options.add(OracleDataSourceOptions.SERVER_TIME_ZONE);
         options.add(OracleDataSourceOptions.SERVER_ID);
         options.add(OracleDataSourceOptions.SCAN_STARTUP_MODE);
@@ -153,6 +165,14 @@ public class OracleDataSourceFactory implements DataSourceFactory {
     private static final String SCAN_STARTUP_MODE_VALUE_SPECIFIC_OFFSET = "specific-offset";
     private static final String SCAN_STARTUP_MODE_VALUE_TIMESTAMP = "timestamp";
 
+    private static String[] getTableList(OracleSourceConfig sourceConfig, Selectors selectors) {
+        return OracleSchemaUtils.listTables(sourceConfig, null).stream()
+                .filter(selectors::isMatch)
+                .map(TableId::toString)
+                .toArray(String[]::new);
+    }
+
+    // todo: support oracle startup mode
     private static StartupOptions getStartupOptions(Configuration config) {
         String modeString = config.get(OracleDataSourceOptions.SCAN_STARTUP_MODE);
 
