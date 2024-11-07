@@ -149,7 +149,7 @@ public class PostgresSourceFetchTaskContext extends JdbcSourceFetchTaskContext {
                                     .getConfig()
                                     .edit()
                                     // never drop slot for stream split, which is also global split
-                                    .with(DROP_SLOT_ON_STOP.name(), false)
+                                    .with(DROP_SLOT_ON_STOP.name(), true)
                                     .build());
         }
 
