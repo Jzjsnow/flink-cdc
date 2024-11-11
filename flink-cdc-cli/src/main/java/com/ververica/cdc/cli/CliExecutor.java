@@ -33,7 +33,9 @@ import com.ververica.cdc.common.pipeline.PipelineOptions;
 import com.ververica.cdc.composer.PipelineComposer;
 import com.ververica.cdc.composer.PipelineExecution;
 import com.ververica.cdc.composer.definition.PipelineDef;
+import com.ververica.cdc.composer.definition.SinkDef;
 
+import java.io.File;
 import java.nio.file.Path;
 import java.util.Collections;
 import java.util.List;
@@ -110,6 +112,7 @@ public class CliExecutor {
 
         // Add Flink configuration from pipeline definition to flinkConfig
         addFlinkConfigurationFromPipelineDef(flinkConfig, pipelineDef);
+
         // Add Flink configuration from cli to flinkConfig
         flinkConfig.addAll(cliConfiguration);
 
@@ -139,7 +142,7 @@ public class CliExecutor {
     }
 
     /**
-     * submit an flink application for execution in "Application Mode" with configurations.
+     * submit a flink application for execution in "Application Mode" with configurations.
      *
      * @param pipelineDef
      * @return clusterId
@@ -161,6 +164,10 @@ public class CliExecutor {
                     pipelineDef.getConfig().get(PipelineOptions.ENCRYPTOR_PRIVATE_KEY_LOCATION);
             addShipFile(privateKeyFile, flinkConfig);
         }
+
+        // add additional files to ship to be shipped to the YARN cluster from the pipeline
+        // definition
+        addAdditionalFilesToShipFromPipelineDef(pipelineDef);
 
         // convert configuration from flinkcdc to flink configuration
         org.apache.flink.configuration.Configuration flinkApplicationConf =
@@ -216,6 +223,15 @@ public class CliExecutor {
                                         Map.Entry::getValue));
         Configuration newFlinkConf = Configuration.fromMap(flinkConfToAdd);
         flinkConfig.addAll(newFlinkConf);
+    }
+
+    private void addAdditionalFilesToShipFromPipelineDef(PipelineDef pipelineDef) {
+        // Add additional files to be shipped to the YARN cluster from sink configurations
+        if (pipelineDef.getSink().getConfig().contains(SinkDef.HIVE_CONF_LOCATION)) {
+            File sinkAddtionalFile =
+                    new File(pipelineDef.getSink().getConfig().get(SinkDef.HIVE_CONF_LOCATION));
+            addShipFile(sinkAddtionalFile.getAbsolutePath(), flinkConfig);
+        }
     }
 
     @VisibleForTesting

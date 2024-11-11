@@ -16,6 +16,8 @@
 
 package com.ververica.cdc.composer.definition;
 
+import com.ververica.cdc.common.configuration.ConfigOption;
+import com.ververica.cdc.common.configuration.ConfigOptions;
 import com.ververica.cdc.common.configuration.Configuration;
 
 import javax.annotation.Nullable;
@@ -40,6 +42,13 @@ public class SinkDef {
     @Nullable private final String name;
     private final Configuration config;
     public static final String PASSWORD = "password";
+    public static final String HIVE_CONF_FILE_CONTENTS = "$internal.hive-conf.file-contents";
+    public static final ConfigOption<String> HIVE_CONF_LOCATION =
+            ConfigOptions.key("catalog.hive.conf.location")
+                    .stringType()
+                    .noDefaultValue()
+                    .withDescription(
+                            "The location of the hive configuration file, e.g. hive-site.xml.");
 
     public SinkDef(String type, @Nullable String name, Configuration config) {
         this.type = type;

@@ -24,9 +24,13 @@ import com.ververica.cdc.composer.definition.PipelineDef;
 import com.ververica.cdc.composer.definition.RouteDef;
 import com.ververica.cdc.composer.definition.SinkDef;
 import com.ververica.cdc.composer.definition.SourceDef;
+import org.apache.commons.io.FileUtils;
 import org.junit.jupiter.api.Test;
 
+import java.io.File;
+import java.io.IOException;
 import java.net.URL;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -39,6 +43,8 @@ import static org.assertj.core.api.AssertionsForClassTypes.assertThatThrownBy;
 
 /** Unit test for {@link YamlPipelineDefinitionParser}. */
 class YamlPipelineDefinitionParserTest {
+
+    YamlPipelineDefinitionParserTest() throws IOException {}
 
     @Test
     void testParsingFullDefinition() throws Exception {
@@ -149,6 +155,16 @@ class YamlPipelineDefinitionParserTest {
         YamlPipelineDefinitionParser parser = new YamlPipelineDefinitionParser();
         PipelineDef pipelineDef = parser.parse(Paths.get(resource.toURI()), new Configuration());
         assertThat(pipelineDef).isInstanceOf(PipelineDef.class);
+    }
+
+    @Test
+    void testParsingHiveConfFileFromSinkDef() throws Exception {
+        URL resource =
+                Resources.getResource(
+                        "definitions/mysql-to-iceberg-with-hive-conf-file-in-sink-definition.yaml");
+        YamlPipelineDefinitionParser parser = new YamlPipelineDefinitionParser();
+        PipelineDef pipelineDef = parser.parse(Paths.get(resource.toURI()), new Configuration());
+        assertThat(pipelineDef).isEqualTo(icebergDefWithSinkHiveConfLocation);
     }
 
     SourceDef sourceDef =
@@ -283,6 +299,29 @@ class YamlPipelineDefinitionParserTest {
             new PipelineDef(
                     mysqlSourceDefs,
                     new SinkDef("kafka", null, new Configuration()),
+                    Collections.emptyList(),
+                    null,
+                    new Configuration());
+
+    private final String getHiveConfContent =
+            FileUtils.readFileToString(
+                    new File(Resources.getResource("conf/hive-site.xml").getPath()),
+                    StandardCharsets.UTF_8);
+    private final PipelineDef icebergDefWithSinkHiveConfLocation =
+            new PipelineDef(
+                    mysqlSourceDefs,
+                    new SinkDef(
+                            "iceberg",
+                            null,
+                            Configuration.fromMap(
+                                    ImmutableMap.<String, String>builder()
+                                            .put(
+                                                    "catalog.hive.conf.location",
+                                                    "src/test/resources/conf/hive-site.xml")
+                                            .put(
+                                                    "$internal.hive-conf.file-contents",
+                                                    getHiveConfContent)
+                                            .build())),
                     Collections.emptyList(),
                     null,
                     new Configuration());

@@ -223,7 +223,7 @@ public class CliFrontend {
                         : new ArrayList<>();
         shipFiles.add(fileToShip);
         flinkConfig.set(YarnApplicationOptions.SHIP_FILES, shipFiles);
-        LOG.info("Add File {} to be shipped to the YARN cluster: ", fileToShip);
+        LOG.info("Add File {} to be shipped to the YARN cluster", fileToShip);
     }
 
     public static void addShipFiles(List<String> filesToShip, Configuration flinkConfig) {
@@ -236,7 +236,7 @@ public class CliFrontend {
                         : new ArrayList<>();
         shipFiles.addAll(filesToShip);
         flinkConfig.set(YarnApplicationOptions.SHIP_FILES, shipFiles);
-        LOG.info("Add Files {} to be shipped to the YARN cluster: ", filesToShip);
+        LOG.info("Add Files {} to be shipped to the YARN cluster", filesToShip);
     }
 
     private static SavepointRestoreSettings createSavepointRestoreSettings(

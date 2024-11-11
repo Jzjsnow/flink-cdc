@@ -1,0 +1,6 @@
+source:
+  type: mysql
+
+sink:
+  type: iceberg
+  catalog.hive.conf.location: src/test/resources/conf/hive-site.xml

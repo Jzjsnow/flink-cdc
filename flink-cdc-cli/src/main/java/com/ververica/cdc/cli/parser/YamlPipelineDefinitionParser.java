@@ -33,20 +33,26 @@ import com.ververica.cdc.composer.definition.PipelineDef;
 import com.ververica.cdc.composer.definition.RouteDef;
 import com.ververica.cdc.composer.definition.SinkDef;
 import com.ververica.cdc.composer.definition.SourceDef;
+import org.apache.commons.io.FileUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import javax.annotation.Nullable;
+
 import java.io.File;
+import java.io.IOException;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.net.MalformedURLException;
 import java.net.URL;
 import java.net.URLClassLoader;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 
 import static com.ververica.cdc.common.utils.Preconditions.checkNotNull;
@@ -74,6 +80,7 @@ public class YamlPipelineDefinitionParser implements PipelineDefinitionParser {
     private static final String ROUTE_SOURCE_TABLE_KEY = "source-table";
     private static final String ROUTE_SINK_TABLE_KEY = "sink-table";
     private static final String ROUTE_DESCRIPTION_KEY = "description";
+    private static final String ICEBERG = "iceberg";
 
     private final ObjectMapper mapper = new ObjectMapper(new YAMLFactory());
 
@@ -128,7 +135,7 @@ public class YamlPipelineDefinitionParser implements PipelineDefinitionParser {
 
             // Sink is required
             sinkDef =
-                    toDecryptedSinkDef(
+                    toSinkDef(
                             checkNotNull(
                                     root.get(SINK_KEY),
                                     "Missing required field \"%s\" in pipeline definition",
@@ -182,64 +189,81 @@ public class YamlPipelineDefinitionParser implements PipelineDefinitionParser {
         return sourceDefs;
     }
 
-    private void getSourceDef(JsonNode sourceNode, List<SourceDef> sourceDefs) {
-        SourceDef sourceDef =
-                toSourceDef(
-                        checkNotNull(
-                                sourceNode,
-                                "Missing required field \"%s\" in pipeline definition",
-                                SOURCE_KEY));
-        sourceDefs.add(sourceDef);
-    }
-
+    /**
+     * Extracts source definitions from a source JSON node and adds them to a list. Depending on
+     * whether the source is encrypted, it processes the source node accordingly.
+     *
+     * @param sourceNode The JSON node containing the source information.
+     * @param sourceDefs A list to store the extracted source definitions.
+     * @param isEncrypted Indicates whether the source is encrypted. If `isEncrypted` is `false`,
+     *     `encryptor` should be `null`.
+     * @param encryptor An optional instance of {@link EncryptorPropertyResolver} for decryption,
+     *     can be null if the password is not encrypted.
+     */
     private void getSourceDef(
             JsonNode sourceNode,
             List<SourceDef> sourceDefs,
             boolean isEncrypted,
-            EncryptorPropertyResolver encryptor) {
+            @Nullable EncryptorPropertyResolver encryptor) {
+        SourceDef sourceDef;
         if (!isEncrypted) {
-            getSourceDef(sourceNode, sourceDefs);
+            sourceDef =
+                    toSourceDef(
+                            checkNotNull(
+                                    sourceNode,
+                                    "Missing required field \"%s\" in pipeline definition",
+                                    SOURCE_KEY));
         } else {
-            SourceDef sourceDef =
-                    toDecryptedSourceDef(
+            sourceDef =
+                    toSourceDef(
                             checkNotNull(
                                     sourceNode,
                                     "Missing required field \"%s\" in pipeline definition",
                                     SOURCE_KEY),
                             encryptor);
-            sourceDefs.add(sourceDef);
         }
+        sourceDefs.add(sourceDef);
     }
 
+    /**
+     * Converts a source JSON object into a SourceDef object. Note: The source does not contain
+     * encrypted passwords, or else use the method {@link #toSourceDef(JsonNode,
+     * EncryptorPropertyResolver)}
+     *
+     * @param sourceNode A JSON object representing the source configuration.
+     * @return A SourceDef object converted from the sourceNode.
+     */
     private SourceDef toSourceDef(JsonNode sourceNode) {
-        Map<String, String> sourceMap =
-                mapper.convertValue(sourceNode, new TypeReference<Map<String, String>>() {});
-
-        // "type" field is required
-        String type =
-                checkNotNull(
-                        sourceMap.remove(TYPE_KEY),
-                        "Missing required field \"%s\" in source configuration",
-                        TYPE_KEY);
-
-        // "name" field is optional
-        String name = sourceMap.remove(NAME_KEY);
-
-        return new SourceDef(type, name, Configuration.fromMap(sourceMap));
+        return toSourceDef(sourceNode, null);
     }
 
-    private SourceDef toDecryptedSourceDef(
-            JsonNode sourceNode, EncryptorPropertyResolver encryptor) {
+    /**
+     * Converts a source JSON object into a SourceDef object. If an {@link
+     * EncryptorPropertyResolver} is provided ({@code encryptor} != null), it will be used to
+     * decrypt the password contained in the source configuration.
+     *
+     * @param sourceNode A JSON object representing the source configuration.
+     * @param encryptor An optional instance of {@link EncryptorPropertyResolver} for decryption,
+     *     can be null if the password is not encrypted.
+     * @return A SourceDef object converted from the sourceNode.
+     */
+    private SourceDef toSourceDef(
+            JsonNode sourceNode, @Nullable EncryptorPropertyResolver encryptor) {
         Map<String, String> sourceMap =
                 mapper.convertValue(sourceNode, new TypeReference<Map<String, String>>() {});
 
-        if (sourceMap.containsKey(SourceDef.PASSWORD)) {
-            String decryptedPassword =
-                    encryptor.resolvePropertyValue(sourceMap.get(SourceDef.PASSWORD));
-            sourceMap.put(SourceDef.PASSWORD, decryptedPassword);
-            LOG.info("Password for source has been decrypted and refreshed");
-        } else {
-            LOG.info("No password available for source and decryption is skipped");
+        // if an encryptor is provided, attempt to decrypt the password
+        if (Objects.nonNull(encryptor)) {
+            // check if the password field exists in the source map
+            if (sourceMap.containsKey(SourceDef.PASSWORD)) {
+                // decrypt the password and update the sourceMap
+                String decryptedPassword =
+                        encryptor.resolvePropertyValue(sourceMap.get(SourceDef.PASSWORD));
+                sourceMap.put(SourceDef.PASSWORD, decryptedPassword);
+                LOG.info("Password for source has been decrypted and refreshed");
+            } else {
+                LOG.info("No password available for source and decryption is skipped");
+            }
         }
 
         // "type" field is required
@@ -255,34 +279,43 @@ public class YamlPipelineDefinitionParser implements PipelineDefinitionParser {
         return new SourceDef(type, name, Configuration.fromMap(sourceMap));
     }
 
+    /**
+     * Converts a sink JSON node into a SinkDef object. Note: The sink does not contain encrypted
+     * passwords, or else use the method {@link #toSinkDef(JsonNode, EncryptorPropertyResolver)}
+     *
+     * @param sinkNode A JSON node representing the sink configuration.
+     * @return A SinkDef object converted from the sinkNode.
+     */
     private SinkDef toSinkDef(JsonNode sinkNode) {
-        Map<String, String> sinkMap =
-                mapper.convertValue(sinkNode, new TypeReference<Map<String, String>>() {});
-
-        // "type" field is required
-        String type =
-                checkNotNull(
-                        sinkMap.remove(TYPE_KEY),
-                        "Missing required field \"%s\" in sink configuration",
-                        TYPE_KEY);
-
-        // "name" field is optional
-        String name = sinkMap.remove(NAME_KEY);
-
-        return new SinkDef(type, name, Configuration.fromMap(sinkMap));
+        return toSinkDef(sinkNode, null);
     }
 
-    private SinkDef toDecryptedSinkDef(JsonNode sinkNode, EncryptorPropertyResolver encryptor) {
+    /**
+     * Converts a sink JSON node into a SinkDef object. If an {@link EncryptorPropertyResolver} is
+     * provided ({@code encryptor} != null), it will be used to decrypt the password contained in
+     * the sink configuration.
+     *
+     * @param sinkNode JSON node representing the sink configuration.
+     * @param encryptor An object for resolving encrypted properties, which may be null if the
+     *     password is not encrypted.
+     * @return A SinkDef object converted from the sinkNode.
+     */
+    private SinkDef toSinkDef(JsonNode sinkNode, @Nullable EncryptorPropertyResolver encryptor) {
         Map<String, String> sinkMap =
                 mapper.convertValue(sinkNode, new TypeReference<Map<String, String>>() {});
 
-        if (sinkMap.containsKey(SinkDef.PASSWORD)) {
-            String decryptedPassword =
-                    encryptor.resolvePropertyValue(sinkMap.get(SinkDef.PASSWORD));
-            sinkMap.put(SinkDef.PASSWORD, decryptedPassword);
-            LOG.info("Password for sink has been decrypted and refreshed");
-        } else {
-            LOG.info("No password available for sink and decryption is skipped");
+        // if an encryptor is provided, attempt to decrypt the password
+        if (Objects.nonNull(encryptor)) {
+            // check if the password field exists in the sink map
+            if (sinkMap.containsKey(SinkDef.PASSWORD)) {
+                // decrypt the password and update the sinkMap
+                String decryptedPassword =
+                        encryptor.resolvePropertyValue(sinkMap.get(SinkDef.PASSWORD));
+                sinkMap.put(SinkDef.PASSWORD, decryptedPassword);
+                LOG.info("Password for sink has been decrypted and refreshed");
+            } else {
+                LOG.info("No password available for sink and decryption is skipped");
+            }
         }
 
         // "type" field is required
@@ -292,10 +325,44 @@ public class YamlPipelineDefinitionParser implements PipelineDefinitionParser {
                         "Missing required field \"%s\" in sink configuration",
                         TYPE_KEY);
 
+        if (ICEBERG.equals(type)) {
+            // set additional hive conf file content
+            setAdditionalHiveConfFileContent(sinkMap);
+        }
+
         // "name" field is optional
         String name = sinkMap.remove(NAME_KEY);
 
         return new SinkDef(type, name, Configuration.fromMap(sinkMap));
+    }
+
+    /**
+     * Set additional configuration file contents of Hive. This method adds the content of the
+     * hive-site.xml to the sinkMap, which is used in the pipeline configuration.
+     *
+     * @param sinkMap
+     */
+    private void setAdditionalHiveConfFileContent(Map<String, String> sinkMap) {
+        if (sinkMap.containsKey(SinkDef.HIVE_CONF_LOCATION.key())) {
+            String hiveConfLocation = sinkMap.get(SinkDef.HIVE_CONF_LOCATION.key());
+            if (hiveConfLocation != null) {
+                File hiveConfFile = new File(sinkMap.get(SinkDef.HIVE_CONF_LOCATION.key()));
+                if (!hiveConfFile.exists()) {
+                    LOG.warn("Hive configuration file {} does not exist", hiveConfFile);
+                    return;
+                }
+                LOG.info("Add Hive configuration file:\n {}", hiveConfFile);
+                String xmlContent = null;
+                try {
+                    xmlContent = FileUtils.readFileToString(hiveConfFile, StandardCharsets.UTF_8);
+                } catch (IOException e) {
+                    throw new RuntimeException(e);
+                }
+                sinkMap.put(SinkDef.HIVE_CONF_FILE_CONTENTS, xmlContent);
+            }
+        } else {
+            LOG.warn("Configuration {} is not set for sink", SinkDef.HIVE_CONF_LOCATION.key());
+        }
     }
 
     private RouteDef toRouteDef(JsonNode routeNode) {

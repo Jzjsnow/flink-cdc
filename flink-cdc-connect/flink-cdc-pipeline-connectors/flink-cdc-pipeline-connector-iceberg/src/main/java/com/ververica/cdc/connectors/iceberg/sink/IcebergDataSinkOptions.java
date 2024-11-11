@@ -90,6 +90,13 @@ public class IcebergDataSinkOptions {
                     .defaultValue("5")
                     .withDescription("The Hive metastore client pool size, default value is 2. ");
 
+    public static final ConfigOption<String> HIVE_CONF_FILE_CONTENTS =
+            ConfigOptions.key("$internal.hive-conf.file-contents")
+                    .stringType()
+                    .noDefaultValue()
+                    .withDescription(
+                            "The contents of the additional configuration file hive-site.xml (set in `sink.catalog.hive.conf.location` or `pipeline.additional-files`).");
+
     public static Map<String, String> getPropertiesByPrefix(
             Configuration tableOptions, String prefix) {
         final Map<String, String> props = new HashMap<>();

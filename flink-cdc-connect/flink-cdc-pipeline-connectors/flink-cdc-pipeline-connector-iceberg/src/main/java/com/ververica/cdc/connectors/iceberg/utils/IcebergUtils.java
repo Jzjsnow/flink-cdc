@@ -24,6 +24,7 @@ import org.apache.iceberg.flink.FlinkCatalogFactory;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.ByteArrayInputStream;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -47,6 +48,20 @@ public class IcebergUtils {
         return configuration;
     }
 
+    public static org.apache.hadoop.conf.Configuration hiveConfiguration(Configuration config) {
+        org.apache.hadoop.conf.Configuration configuration = hadoopConfiguration(config);
+        // add hive-site.xml contents from configuration
+        if (config.contains(IcebergDataSinkOptions.HIVE_CONF_FILE_CONTENTS)) {
+            String xmlContent = config.get(IcebergDataSinkOptions.HIVE_CONF_FILE_CONTENTS);
+            LOG.info("Add resource from contents of hive-site.xml:\n {}", xmlContent);
+            configuration.addResource(new ByteArrayInputStream(xmlContent.getBytes()));
+        } else {
+            LOG.info("The contents of hive-conf.xml is not set, will use default hive-site.xml");
+        }
+
+        return configuration;
+    }
+
     public static CatalogLoader catalogLoader(String catalog, Configuration config) {
         String catalogType = config.get(IcebergDataSinkOptions.CATALOG_TYPE);
         Map<String, String> map = new HashMap<>();
@@ -65,7 +80,7 @@ public class IcebergUtils {
                         config.get(IcebergDataSinkOptions.CLIENT_POOL_SIZE));
                 String prefix = "catalog.hive.";
                 map = getPropertiesByPrefix(config, prefix);
-                return CatalogLoader.hive(catalog, hadoopConfiguration(config), map);
+                return CatalogLoader.hive(catalog, hiveConfiguration(config), map);
             case FlinkCatalogFactory.ICEBERG_CATALOG_TYPE_HADOOP:
                 LOG.debug("Hadoop catalog dont not need init catalogloader!");
                 return null;
