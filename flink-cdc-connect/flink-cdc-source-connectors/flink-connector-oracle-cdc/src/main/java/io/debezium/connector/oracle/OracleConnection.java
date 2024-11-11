@@ -581,7 +581,7 @@ public class OracleConnection extends JdbcConnection {
         try {
 
             PreparedStatement statement =
-                    createPreparedStatement("SELECT scn_to_timestamp('?') FROM DUAL");
+                    createPreparedStatement("SELECT scn_to_timestamp(?) FROM DUAL");
             statement.setString(1, scn.toString());
             ResultSet rs = statement.executeQuery();
             return rs.next() ? Optional.of(rs.getTimestamp(1).toInstant()) : Optional.empty();
