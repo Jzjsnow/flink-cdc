@@ -40,6 +40,7 @@ import com.ververica.cdc.runtime.operators.schema.event.SchemaChangeRequest;
 import com.ververica.cdc.runtime.testutils.schema.CollectingMetadataApplier;
 import com.ververica.cdc.runtime.testutils.schema.TestingSchemaRegistryGateway;
 
+import java.util.Collections;
 import java.util.LinkedList;
 
 /**
@@ -72,7 +73,8 @@ public class EventOperatorTestHarness<OP extends AbstractStreamOperator<E>, E ex
                         "SchemaOperator",
                         new MockOperatorCoordinatorContext(
                                 SCHEMA_OPERATOR_ID, Thread.currentThread().getContextClassLoader()),
-                        new CollectingMetadataApplier());
+                        new CollectingMetadataApplier(),
+                        Collections.emptyList());
         schemaRegistryGateway = new TestingSchemaRegistryGateway(schemaRegistry);
     }
 

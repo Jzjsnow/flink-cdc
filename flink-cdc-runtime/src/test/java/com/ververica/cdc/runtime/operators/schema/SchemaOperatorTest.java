@@ -30,6 +30,7 @@ import com.ververica.cdc.runtime.serializer.event.EventSerializer;
 import com.ververica.cdc.runtime.typeutils.BinaryRecordDataGenerator;
 import org.junit.jupiter.api.Test;
 
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
@@ -96,7 +97,7 @@ public class SchemaOperatorTest {
             int maxParallelism, int parallelism, int subtaskIndex, OperatorID opID)
             throws Exception {
         return new OneInputStreamOperatorTestHarness<>(
-                new SchemaOperator(),
+                new SchemaOperator(Duration.ofMinutes(5),new ArrayList<>()),
                 maxParallelism,
                 parallelism,
                 subtaskIndex,

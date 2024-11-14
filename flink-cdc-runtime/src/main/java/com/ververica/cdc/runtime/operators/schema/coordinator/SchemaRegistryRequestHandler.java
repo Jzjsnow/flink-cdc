@@ -16,8 +16,6 @@
 
 package com.ververica.cdc.runtime.operators.schema.coordinator;
 
-import org.apache.flink.runtime.operators.coordination.CoordinationResponse;
-
 import com.ververica.cdc.common.annotation.Internal;
 import com.ververica.cdc.common.event.SchemaChangeEvent;
 import com.ververica.cdc.common.event.SchemaChangeEventType;
@@ -29,6 +27,7 @@ import com.ververica.cdc.runtime.operators.schema.event.SchemaChangeProcessingRe
 import com.ververica.cdc.runtime.operators.schema.event.SchemaChangeRequest;
 import com.ververica.cdc.runtime.operators.schema.event.SchemaChangeResponse;
 import com.ververica.cdc.runtime.operators.schema.event.SchemaChangeResultResponse;
+import org.apache.flink.runtime.operators.coordination.CoordinationResponse;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -56,6 +55,7 @@ public class SchemaRegistryRequestHandler implements Closeable {
     private final Set<Integer> activeSinkWriters;
     /** Schema manager holding schema for all tables. */
     private final SchemaManager schemaManager;
+    private final SchemaDerivation schemaDerivation;
 
     /**
      * Atomic flag indicating if current RequestHandler could accept more schema changes for now.
@@ -78,10 +78,12 @@ public class SchemaRegistryRequestHandler implements Closeable {
     public SchemaRegistryRequestHandler(
             MetadataApplier metadataApplier,
             SchemaManager schemaManager,
-            SchemaChangeBehavior schemaChangeBehavior) {
+            SchemaChangeBehavior schemaChangeBehavior,
+            SchemaDerivation schemaDerivation) {
         this.metadataApplier = metadataApplier;
         this.schemaManager = schemaManager;
         this.schemaChangeBehavior = schemaChangeBehavior;
+        this.schemaDerivation = schemaDerivation;
 
         this.activeSinkWriters = ConcurrentHashMap.newKeySet();
         this.flushedSinkWriters = ConcurrentHashMap.newKeySet();
@@ -165,10 +167,20 @@ public class SchemaRegistryRequestHandler implements Closeable {
                 return CompletableFuture.completedFuture(wrap(SchemaChangeResponse.duplicate()));
             }
             schemaManager.applySchemaChange(event);
-            List<SchemaChangeEvent> derivedSchemaChangeEvents = new ArrayList<>();
+            List<SchemaChangeEvent> derivedSchemaChangeEvents =
+                    schemaDerivation.applySchemaChange(request.getSchemaChangeEvent());
 
-            // In the future, emitting multiple derived schema change events is supported
-            derivedSchemaChangeEvents.add(request.getSchemaChangeEvent());
+            // If this schema change event is filtered out by LENIENT mode or merging table route
+            // strategies, ignore it.
+            if (derivedSchemaChangeEvents.isEmpty()) {
+                LOG.info("Event {} is omitted from sending to downstream, ignoring it.", event);
+                clearCurrentSchemaChangeRequest();
+                Preconditions.checkState(
+                        schemaChangeStatus.compareAndSet(
+                                RequestStatus.WAITING_FOR_FLUSH, RequestStatus.IDLE),
+                        "Illegal schemaChangeStatus state: should still in WAITING_FOR_FLUSH state if event was ignored.");
+                return CompletableFuture.completedFuture(wrap(SchemaChangeResponse.ignored()));
+            }
             currentDerivedSchemaChangeEvents = new ArrayList<>(derivedSchemaChangeEvents);
 
             return CompletableFuture.completedFuture(

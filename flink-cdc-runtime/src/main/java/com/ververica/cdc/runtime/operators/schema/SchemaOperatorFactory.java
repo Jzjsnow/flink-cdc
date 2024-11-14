@@ -16,6 +16,8 @@
 
 package com.ververica.cdc.runtime.operators.schema;
 
+import com.ververica.cdc.common.event.TableId;
+import org.apache.flink.api.java.tuple.Tuple2;
 import org.apache.flink.runtime.jobgraph.OperatorID;
 import org.apache.flink.runtime.operators.coordination.OperatorCoordinator;
 import org.apache.flink.streaming.api.operators.CoordinatedOperatorFactory;
@@ -29,6 +31,7 @@ import com.ververica.cdc.common.sink.MetadataApplier;
 import com.ververica.cdc.runtime.operators.schema.coordinator.SchemaRegistryProvider;
 
 import java.time.Duration;
+import java.util.List;
 
 /** Factory to create {@link SchemaOperator}. */
 @Internal
@@ -38,21 +41,24 @@ public class SchemaOperatorFactory extends SimpleOperatorFactory<Event>
     private static final long serialVersionUID = 1L;
 
     private final MetadataApplier metadataApplier;
+    private final List<Tuple2<String, TableId>> routingRules;
     private final SchemaChangeBehavior schemaChangeBehavior;
 
     public SchemaOperatorFactory(
             MetadataApplier metadataApplier,
             Duration rpcTimeOut,
-            SchemaChangeBehavior schemaChangeBehavior) {
-        super(new SchemaOperator(rpcTimeOut, schemaChangeBehavior));
+            SchemaChangeBehavior schemaChangeBehavior,
+            List<Tuple2<String, TableId>> routingRules) {
+        super(new SchemaOperator(rpcTimeOut, schemaChangeBehavior,routingRules));
         this.metadataApplier = metadataApplier;
         this.schemaChangeBehavior = schemaChangeBehavior;
+        this.routingRules = routingRules;
     }
 
     @Override
     public OperatorCoordinator.Provider getCoordinatorProvider(
             String operatorName, OperatorID operatorID) {
         return new SchemaRegistryProvider(
-                operatorID, operatorName, metadataApplier, schemaChangeBehavior);
+                operatorID, operatorName, metadataApplier, schemaChangeBehavior, routingRules);
     }
 }

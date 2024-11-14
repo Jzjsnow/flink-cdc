@@ -16,10 +16,6 @@
 
 package com.ververica.cdc.composer.flink;
 
-import org.apache.flink.configuration.DeploymentOptions;
-import org.apache.flink.streaming.api.datastream.DataStream;
-import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
-
 import com.ververica.cdc.common.annotation.Internal;
 import com.ververica.cdc.common.configuration.Configuration;
 import com.ververica.cdc.common.event.Event;
@@ -36,10 +32,12 @@ import com.ververica.cdc.composer.flink.coordination.OperatorIDGenerator;
 import com.ververica.cdc.composer.flink.translator.DataSinkTranslator;
 import com.ververica.cdc.composer.flink.translator.DataSourceTranslator;
 import com.ververica.cdc.composer.flink.translator.PartitioningTranslator;
-import com.ververica.cdc.composer.flink.translator.RouteTranslator;
 import com.ververica.cdc.composer.flink.translator.SchemaOperatorTranslator;
 import com.ververica.cdc.composer.utils.FactoryDiscoveryUtils;
 import com.ververica.cdc.runtime.serializer.event.EventSerializer;
+import org.apache.flink.configuration.DeploymentOptions;
+import org.apache.flink.streaming.api.datastream.DataStream;
+import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
 
 import java.net.URI;
 import java.net.URL;
@@ -110,10 +108,6 @@ public class FlinkPipelineComposer implements PipelineComposer {
             }
         }
 
-        // Route
-        RouteTranslator routeTranslator = new RouteTranslator();
-        stream = routeTranslator.translate(stream, pipelineDef.getRoute());
-
         // Create sink in advance as schema operator requires MetadataApplier
         DataSink dataSink = createDataSink(pipelineDef.getSink(), pipelineDef.getConfig());
 
@@ -129,7 +123,7 @@ public class FlinkPipelineComposer implements PipelineComposer {
                                 .get(PipelineOptions.PIPELINE_SCHEMA_OPERATOR_RPC_TIMEOUT));
         stream =
                 schemaOperatorTranslator.translate(
-                        stream, parallelism, dataSink.getMetadataApplier());
+                        stream, parallelism, dataSink.getMetadataApplier(), pipelineDef.getRoute());
         OperatorIDGenerator schemaOperatorIDGenerator =
                 new OperatorIDGenerator(schemaOperatorTranslator.getSchemaOperatorUid());
 
