@@ -240,4 +240,12 @@ public class MySqlDataSourceOptions {
                     .defaultValue(true)
                     .withDescription(
                             "Whether send schema change events, by default is true. If set to false, the schema changes will not be sent.");
+
+    @Experimental
+    public static final ConfigOption<String> UDAL_SHARDKEY_COLUMN =
+            ConfigOptions.key("udal.shardkey.column")
+                    .stringType()
+                    .noDefaultValue()
+                    .withDescription(
+                            "The sharding key column of the shard database creates a joint primary key for the target table.It will be used in the udal scenario. This field is the sharding key of the udal table, and all tables are required to have this sharding key field.");
 }

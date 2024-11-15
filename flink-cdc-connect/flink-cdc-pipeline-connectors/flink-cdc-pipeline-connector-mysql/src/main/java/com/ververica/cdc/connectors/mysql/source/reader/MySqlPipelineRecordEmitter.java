@@ -16,6 +16,7 @@
 
 package com.ververica.cdc.connectors.mysql.source.reader;
 
+import com.ververica.cdc.common.annotation.VisibleForTesting;
 import org.apache.flink.api.connector.source.SourceOutput;
 import org.apache.flink.connector.base.source.reader.RecordEmitter;
 
@@ -81,6 +82,16 @@ public class MySqlPipelineRecordEmitter extends MySqlRecordEmitter<Event> {
         this.sourceConfig = sourceConfig;
         this.alreadySendCreateTableTables = new HashSet<>();
         this.createTableEventCache = generateCreateTableEvent(sourceConfig);
+    }
+
+    @VisibleForTesting
+    public MySqlPipelineRecordEmitter(MySqlSourceConfig sourceConfig) {
+        super(
+                null,
+                null,
+                sourceConfig.isIncludeSchemaChanges());
+        this.sourceConfig = sourceConfig;
+        this.createTableEventCache =null;
     }
 
     @Override
@@ -207,7 +218,11 @@ public class MySqlPipelineRecordEmitter extends MySqlRecordEmitter<Event> {
             tableBuilder.physicalColumn(colName, dataType, column.comment());
         }
 
-        List<String> primaryKey = table.primaryKeyColumnNames();
+        List<String> primaryKey = new ArrayList<>();
+        primaryKey.addAll(table.primaryKeyColumnNames());
+        if (StringUtils.isNotBlank(sourceConfig.getUdalShardkeyColumn())) {
+            primaryKey.add(sourceConfig.getUdalShardkeyColumn());
+        }
         if (Objects.nonNull(primaryKey) && !primaryKey.isEmpty()) {
             tableBuilder.primaryKey(primaryKey);
         }

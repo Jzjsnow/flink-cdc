@@ -74,6 +74,7 @@ import static com.ververica.cdc.connectors.mysql.source.MySqlDataSourceOptions.S
 import static com.ververica.cdc.connectors.mysql.source.MySqlDataSourceOptions.SERVER_ID;
 import static com.ververica.cdc.connectors.mysql.source.MySqlDataSourceOptions.SERVER_TIME_ZONE;
 import static com.ververica.cdc.connectors.mysql.source.MySqlDataSourceOptions.TABLES;
+import static com.ververica.cdc.connectors.mysql.source.MySqlDataSourceOptions.UDAL_SHARDKEY_COLUMN;
 import static com.ververica.cdc.connectors.mysql.source.MySqlDataSourceOptions.USERNAME;
 import static com.ververica.cdc.connectors.mysql.source.utils.ObjectUtils.doubleCompare;
 import static com.ververica.cdc.debezium.table.DebeziumOptions.getDebeziumProperties;
@@ -125,6 +126,7 @@ public class MySqlDataSourceFactory implements DataSourceFactory {
         validateIntegerOption(CONNECT_MAX_RETRIES, connectMaxRetries, 0);
         validateDistributionFactorUpper(distributionFactorUpper);
         validateDistributionFactorLower(distributionFactorLower);
+        String udalShardkeyColumn = config.get(UDAL_SHARDKEY_COLUMN);
 
         Map<String, String> configMap = config.toMap();
         OptionUtils.printOptions(IDENTIFIER, config.toMap());
@@ -152,7 +154,8 @@ public class MySqlDataSourceFactory implements DataSourceFactory {
                         .closeIdleReaders(closeIdleReaders)
                         .includeSchemaChanges(includeSchemaChanges)
                         .debeziumProperties(getDebeziumProperties(configMap))
-                        .jdbcProperties(getJdbcProperties(configMap));
+                        .jdbcProperties(getJdbcProperties(configMap))
+                        .udalShardkeyColumn(udalShardkeyColumn);
 
         Selectors selectors = new Selectors.SelectorsBuilder().includeTables(tables).build();
         String[] capturedTables = getTableList(configFactory.createConfig(0), selectors);

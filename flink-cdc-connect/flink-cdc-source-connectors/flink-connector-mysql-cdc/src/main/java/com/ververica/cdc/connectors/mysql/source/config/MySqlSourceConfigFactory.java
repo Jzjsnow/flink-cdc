@@ -78,6 +78,7 @@ public class MySqlSourceConfigFactory implements Serializable {
     private Properties dbzProperties;
     private Map<ObjectPath, String> chunkKeyColumns = new HashMap<>();
     private boolean skipSnapshotBackfill = false;
+    private String udalShardkeyColumn;
 
     public MySqlSourceConfigFactory hostname(String hostname) {
         this.hostname = hostname;
@@ -162,6 +163,12 @@ public class MySqlSourceConfigFactory implements Serializable {
      */
     public MySqlSourceConfigFactory chunkKeyColumn(Map<ObjectPath, String> chunkKeyColumns) {
         this.chunkKeyColumns.putAll(chunkKeyColumns);
+        return this;
+    }
+
+    /** The shard key of udal table, target table's primary key are union shard key column. */
+    public MySqlSourceConfigFactory udalShardkeyColumn(String shardkeyColumn) {
+        this.udalShardkeyColumn = shardkeyColumn;
         return this;
     }
 
@@ -386,6 +393,7 @@ public class MySqlSourceConfigFactory implements Serializable {
                 props,
                 jdbcProperties,
                 chunkKeyColumns,
-                skipSnapshotBackfill);
+                skipSnapshotBackfill,
+                udalShardkeyColumn);
     }
 }
