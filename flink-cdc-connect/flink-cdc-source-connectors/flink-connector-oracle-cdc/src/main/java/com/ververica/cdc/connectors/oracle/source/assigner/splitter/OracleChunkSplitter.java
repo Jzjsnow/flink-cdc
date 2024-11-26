@@ -250,7 +250,7 @@ public class OracleChunkSplitter implements JdbcSourceChunkSplitter {
         Object chunkEnd = nextChunkEnd(jdbc, min, tableId, splitColumnName, max, chunkSize);
         int count = 0;
 
-        while (chunkEnd != null && isChunkEndLeMax(chunkEnd, max)) {
+        while (chunkEnd != null && !isChunkEndGeMax(jdbc, chunkEnd, max)) {
             // we start from [null, min + chunk_size) and avoid [null, min)
             splits.add(ChunkRange.of(chunkStart, chunkEnd));
             // may sleep a while to avoid DDOS on MySQL server
@@ -277,12 +277,29 @@ public class OracleChunkSplitter implements JdbcSourceChunkSplitter {
     }
 
     /** ChunkEnd greater than or equal to max. */
-    private boolean isChunkEndGeMax(Object chunkEnd, Object max) {
+    private boolean isChunkEndGeMax(JdbcConnection jdbc, Object chunkEnd, Object max)
+            throws SQLException {
         boolean chunkEndMaxCompare;
         if (chunkEnd instanceof ROWID && max instanceof ROWID) {
-            chunkEndMaxCompare =
-                    ROWID.compareBytes(((ROWID) chunkEnd).getBytes(), ((ROWID) max).getBytes())
-                            >= 0;
+            String query =
+                    String.format(
+                            "SELECT CHARTOROWID(?) ROWIDS FROM DUAL UNION SELECT CHARTOROWID(?) ROWIDS FROM DUAL ORDER BY ROWIDS DESC");
+
+            return jdbc.prepareQueryAndMap(
+                    query,
+                    ps -> {
+                        ps.setObject(1, chunkEnd.toString());
+                        ps.setObject(2, max.toString());
+                    },
+                    rs -> {
+                        if (rs.next()) {
+                            Object obj = rs.getObject(1);
+                            return obj.toString().equals(chunkEnd.toString())
+                                    || chunkEnd.toString().equals(max.toString());
+                        } else {
+                            throw new RuntimeException("compare rowid error");
+                        }
+                    });
         } else {
             chunkEndMaxCompare = chunkEnd != null && ObjectUtils.compare(chunkEnd, max) >= 0;
         }
@@ -305,7 +322,7 @@ public class OracleChunkSplitter implements JdbcSourceChunkSplitter {
             // should query the next one larger than chunkEnd
             chunkEnd = queryMin(jdbc, tableId, splitColumnName, chunkEnd);
         }
-        if (isChunkEndGeMax(chunkEnd, max)) {
+        if (isChunkEndGeMax(jdbc, chunkEnd, max)) {
             return null;
         } else {
             return chunkEnd;
