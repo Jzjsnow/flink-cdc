@@ -21,6 +21,7 @@ import org.apache.flink.api.connector.source.SourceOutput;
 import com.ververica.cdc.common.event.CreateTableEvent;
 import com.ververica.cdc.common.event.Event;
 import com.ververica.cdc.common.schema.Schema;
+import com.ververica.cdc.common.schema.Selectors;
 import com.ververica.cdc.connectors.base.source.meta.offset.OffsetFactory;
 import com.ververica.cdc.connectors.base.source.meta.split.SourceSplitState;
 import com.ververica.cdc.connectors.base.source.reader.IncrementalSourceRecordEmitter;
@@ -31,11 +32,15 @@ import io.debezium.jdbc.JdbcConnection;
 import io.debezium.relational.TableId;
 import org.apache.kafka.connect.source.SourceRecord;
 
+import javax.annotation.Nullable;
+
 import java.sql.SQLException;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 /**
  * A builder to build a SourceFunction which can read snapshot and continue to consume binlog for
@@ -59,9 +64,17 @@ public class PgSqlPipelineRecordEmitter extends IncrementalSourceRecordEmitter<E
         alreadySendCreateTableTables = new HashSet<>();
         this.createTableEventCache = new ArrayList<>();
         try (JdbcConnection jdbc = PostgresSchemaUtils.createPostgresConnection(sourceConfig)) {
-
+            List<String> tableList = sourceConfig.getTableList();
+            String database = sourceConfig.getDatabaseList().get(0);
+            tableList =
+                    tableList.stream().map(e -> database + "." + e).collect(Collectors.toList());
+            Selectors selectors =
+                    new Selectors.SelectorsBuilder()
+                            .includeTables(String.join(", ", tableList))
+                            .build();
+            String[] capturedTables = getTableList(sourceConfig, selectors);
             List<TableId> capturedTableIds = new ArrayList<>();
-            for (String table : tableList) {
+            for (String table : capturedTables) {
                 TableId capturedTableId = TableId.parse(table);
                 capturedTableIds.add(capturedTableId);
             }
@@ -70,11 +83,36 @@ public class PgSqlPipelineRecordEmitter extends IncrementalSourceRecordEmitter<E
                 createTableEventCache.add(
                         new CreateTableEvent(
                                 com.ververica.cdc.common.event.TableId.tableId(
-                                        tableId.catalog(), tableId.table()),
+                                        tableId.schema(), tableId.table()),
                                 schema));
             }
         } catch (SQLException e) {
             throw new RuntimeException("Cannot start emitter to fetch table schema.", e);
+        }
+    }
+
+    private static String[] getTableList(PostgresSourceConfig sourceConfig, Selectors selectors) {
+        return listTables(sourceConfig, null).stream()
+                .filter(selectors::isMatch)
+                .map(com.ververica.cdc.common.event.TableId::toString)
+                .toArray(String[]::new);
+    }
+
+    public static List<com.ververica.cdc.common.event.TableId> listTables(
+            PostgresSourceConfig sourceConfig, @Nullable String dbName) {
+        try (JdbcConnection jdbc = PostgresSchemaUtils.createPostgresConnection(sourceConfig)) {
+            List<String> databases =
+                    dbName != null
+                            ? Collections.singletonList(dbName)
+                            : PostgresSchemaUtils.listDatabases(jdbc);
+
+            List<com.ververica.cdc.common.event.TableId> tableIds = new ArrayList<>();
+            for (String database : databases) {
+                tableIds.addAll(PostgresSchemaUtils.listTables(jdbc, database));
+            }
+            return tableIds;
+        } catch (SQLException e) {
+            throw new RuntimeException("Error to list databases: " + e.getMessage(), e);
         }
     }
 

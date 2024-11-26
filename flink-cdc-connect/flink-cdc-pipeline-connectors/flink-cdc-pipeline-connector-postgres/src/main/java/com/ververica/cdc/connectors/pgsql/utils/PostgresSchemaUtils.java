@@ -49,8 +49,6 @@ import java.util.Collections;
 import java.util.List;
 import java.util.stream.Collectors;
 
-import static com.ververica.cdc.connectors.postgres.source.utils.PostgresQueryUtils.quote;
-
 /** Utilities for converting from debezium {@link Table} types to {@link Schema}. */
 public class PostgresSchemaUtils {
 
@@ -176,7 +174,7 @@ public class PostgresSchemaUtils {
         LOG.info("Read list of available databases");
         final List<String> databaseNames = new ArrayList<>();
         jdbc.query(
-                "SHOW DATABASES WHERE `database` NOT IN ('information_schema', 'mysql', 'performance_schema', 'sys')",
+                "SELECT datname FROM pg_database WHERE datistemplate = false ;",
                 rs -> {
                     while (rs.next()) {
                         databaseNames.add(rs.getString(1));
@@ -197,10 +195,13 @@ public class PostgresSchemaUtils {
         LOG.info("Read list of available tables in {}", dbName);
         final List<TableId> tableIds = new ArrayList<>();
         jdbc.query(
-                "SHOW FULL TABLES IN " + quote(dbName) + " where Table_Type = 'BASE TABLE'",
+                "SELECT table_catalog,table_schema,table_name FROM information_schema.tables WHERE table_catalog = '"
+                        + dbName
+                        + "' ;",
                 rs -> {
                     while (rs.next()) {
-                        tableIds.add(TableId.tableId(dbName, rs.getString(1)));
+                        tableIds.add(
+                                TableId.tableId(rs.getString(1), rs.getString(2), rs.getString(3)));
                     }
                 });
         LOG.info("\t list of available tables are: {}", tableIds);
@@ -427,8 +428,12 @@ public class PostgresSchemaUtils {
                 break;
             case "numeric":
                 dataType =
-                        new DecimalType(
-                                columnInfo.getNumericPrecision(), columnInfo.getNumericScale());
+                        columnInfo.getNumericPrecision() == 0
+                                        || columnInfo.getNumericPrecision() == null
+                                ? new DecimalType()
+                                : new DecimalType(
+                                        columnInfo.getNumericPrecision(),
+                                        columnInfo.getNumericScale());
                 break;
             case "date":
                 dataType = new DateType();
@@ -467,8 +472,8 @@ public class PostgresSchemaUtils {
         List<ColumnInfo> columnInfos = new ArrayList<>();
         final String showCreateTableQuery =
                 String.format(
-                        "SELECT column_name,udt_name,character_maximum_length,numeric_precision,numeric_scale,is_nullable,column_default,datetime_precision FROM information_schema.columns WHERE table_name ='%s' order by ordinal_position",
-                        tableId.table());
+                        "SELECT column_name,udt_name,character_maximum_length,numeric_precision,numeric_scale,is_nullable,column_default,datetime_precision FROM information_schema.columns WHERE table_name ='%s' and table_catalog='%s' and table_schema='%s' order by ordinal_position",
+                        tableId.table(), tableId.catalog(), tableId.schema());
         try {
 
             return jdbc.queryAndMap(
@@ -499,8 +504,8 @@ public class PostgresSchemaUtils {
         List<String> list = new ArrayList<>();
         final String showCreateTableQuery =
                 String.format(
-                        "SELECT kcu.column_name FROM information_schema.table_constraints AS tc JOIN information_schema.key_column_usage  AS kcu ON tc.constraint_name = kcu.constraint_name WHERE tc.constraint_type = 'PRIMARY KEY' AND tc.table_schema='%s' AND tc.table_name = '%s' order by ordinal_position",
-                        tableId.catalog(), tableId.table());
+                        "SELECT kcu.column_name FROM information_schema.table_constraints AS tc JOIN information_schema.key_column_usage  AS kcu ON tc.constraint_name = kcu.constraint_name WHERE tc.constraint_type = 'PRIMARY KEY' AND tc.table_catalog='%s' AND tc.table_schema='%s' AND kcu.table_schema ='%s' AND tc.table_name = '%s' order by ordinal_position",
+                        tableId.catalog(), tableId.schema(), tableId.schema(), tableId.table());
         try {
             return jdbc.queryAndMap(
                     showCreateTableQuery,
