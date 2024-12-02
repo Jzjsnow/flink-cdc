@@ -160,7 +160,9 @@ pipeline {
                     withCredentials([usernamePassword(credentialsId:'credential-nexus',usernameVariable:'USERNAME',passwordVariable:'PASSWORD')]){
                         sh """
                         ls -lh flink-cdc-dist/target
+                        ls -lh ${filepath}
                         rm -rf ${getassemblyversion}.tar.gz
+                        rm -rf ${getassemblyversion}
                         mv ${filepath} ${getassemblyversion}
                         ls -l ${getassemblyversion}/
                         tar -czf ${getassemblyversion}.tar.gz ${getassemblyversion}
