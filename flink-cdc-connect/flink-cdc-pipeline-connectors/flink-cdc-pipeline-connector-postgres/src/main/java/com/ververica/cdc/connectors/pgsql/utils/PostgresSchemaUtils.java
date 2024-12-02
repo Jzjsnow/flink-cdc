@@ -19,6 +19,7 @@ package com.ververica.cdc.connectors.pgsql.utils;
 import com.ververica.cdc.common.event.TableId;
 import com.ververica.cdc.common.schema.Column;
 import com.ververica.cdc.common.schema.Schema;
+import com.ververica.cdc.common.schema.Selectors;
 import com.ververica.cdc.common.types.BigIntType;
 import com.ververica.cdc.common.types.BooleanType;
 import com.ververica.cdc.common.types.DataType;
@@ -520,6 +521,32 @@ public class PostgresSchemaUtils {
         } catch (SQLException e) {
             throw new RuntimeException(String.format("Failed to get table pks for %s", tableId), e);
         }
+    }
+
+    public static List<io.debezium.relational.TableId> getCapturedTableIds(
+            PostgresSourceConfig sourceConfig) {
+        List<String> tableList = sourceConfig.getTableList();
+        String database = sourceConfig.getDatabaseList().get(0);
+        tableList = tableList.stream().map(e -> database + "." + e).collect(Collectors.toList());
+        Selectors selectors =
+                new Selectors.SelectorsBuilder()
+                        .includeTables(String.join(", ", tableList))
+                        .build();
+        String[] capturedTables = getTableList(sourceConfig, selectors);
+        List<io.debezium.relational.TableId> capturedTableIds = new ArrayList<>();
+        for (String table : capturedTables) {
+            io.debezium.relational.TableId capturedTableId =
+                    io.debezium.relational.TableId.parse(table);
+            capturedTableIds.add(capturedTableId);
+        }
+        return capturedTableIds;
+    }
+
+    private static String[] getTableList(PostgresSourceConfig sourceConfig, Selectors selectors) {
+        return listTables(sourceConfig, null).stream()
+                .filter(selectors::isMatch)
+                .map(com.ververica.cdc.common.event.TableId::toString)
+                .toArray(String[]::new);
     }
 
     private PostgresSchemaUtils() {}

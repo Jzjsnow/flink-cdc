@@ -33,10 +33,13 @@ import io.debezium.relational.TableId;
 
 import javax.annotation.Nullable;
 
-import java.util.Arrays;
+import java.sql.SQLException;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Properties;
 import java.util.Set;
+
+import static com.ververica.cdc.connectors.pgsql.utils.PostgresSchemaUtils.getCapturedTableIds;
 
 /**
  * The {@link PgsqlDebeziumSourceFunction} is a streaming data source that pulls captured change
@@ -87,23 +90,21 @@ public class PgsqlDebeziumSourceFunction<T> extends DebeziumSourceFunction<T> {
 
     @Override
     public void run(SourceContext<T> sourceContext) throws Exception {
-        Arrays.stream(tableList)
-                .sequential()
-                .forEach(
-                        e -> {
-                            TableId tableId = TableId.parse(e);
-                            if (!alreadySendCreateTableTables.contains(tableId)) {
-                                try (JdbcConnection jdbc =
-                                        PostgresSchemaUtils.createPostgresConnection(
-                                                sourceConfig)) {
-                                    sendCreateTableEvent(
-                                            jdbc, tableId, (SourceContext<Event>) sourceContext);
-                                    alreadySendCreateTableTables.add(tableId);
-                                } catch (Exception ex) {
-                                    ex.printStackTrace();
-                                }
-                            }
-                        });
+        try (JdbcConnection jdbc = PostgresSchemaUtils.createPostgresConnection(sourceConfig)) {
+            List<TableId> capturedTableIds = getCapturedTableIds(sourceConfig);
+            for (TableId tableId : capturedTableIds) {
+                if (!alreadySendCreateTableTables.contains(tableId)) {
+                    try {
+                        sendCreateTableEvent(jdbc, tableId, (SourceContext<Event>) sourceContext);
+                        alreadySendCreateTableTables.add(tableId);
+                    } catch (Exception ex) {
+                        ex.printStackTrace();
+                    }
+                }
+            }
+        } catch (SQLException e) {
+            throw new RuntimeException("Cannot start emitter to fetch table schema.", e);
+        }
         super.run(sourceContext);
     }
 
@@ -113,7 +114,7 @@ public class PgsqlDebeziumSourceFunction<T> extends DebeziumSourceFunction<T> {
         sourceContext.collect(
                 new CreateTableEvent(
                         com.ververica.cdc.common.event.TableId.tableId(
-                                tableId.catalog(), tableId.table()),
+                                tableId.schema(), tableId.table()),
                         schema));
     }
 }
