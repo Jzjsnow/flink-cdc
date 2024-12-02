@@ -29,6 +29,7 @@ import com.ververica.cdc.common.sink.CustomSink;
 import com.ververica.cdc.common.sink.DataSink;
 import com.ververica.cdc.connectors.iceberg.utils.IcebergUtils;
 import com.ververica.cdc.runtime.operators.sink.CustomRegistryAndReSendCreateTable;
+import org.apache.commons.lang3.StringUtils;
 import org.apache.iceberg.Table;
 import org.apache.iceberg.catalog.Namespace;
 import org.apache.iceberg.catalog.TableIdentifier;
@@ -83,6 +84,7 @@ public class IcebergSink implements CustomSink<Event>, Serializable {
         String database = config.getOptional(IcebergDataSinkOptions.DATABASE).get();
         String tableName = config.getOptional(IcebergDataSinkOptions.TABLENAME).get();
         String catalog = config.get(IcebergDataSinkOptions.CATALOG_NAME);
+        String uidPrefix = config.get(IcebergDataSinkOptions.UID_PREFIX);
         TableIdentifier identifier = TableIdentifier.of(Namespace.of(database), tableName);
         final CatalogLoader catalogLoader = IcebergUtils.catalogLoader(catalog, config);
         Table table = catalogLoader.loadCatalog().loadTable(identifier);
@@ -91,17 +93,14 @@ public class IcebergSink implements CustomSink<Event>, Serializable {
         Set<String> identifierFieldNameSet = table.schema().identifierFieldNames();
         List<String> identifierFieldNameList = new ArrayList<>();
         identifierFieldNameList.addAll(identifierFieldNameSet);
-        DataStream<RowData> dStremMor = serializerDataStream(dataStream, table, schemaOperatorId);
-        //   TODO 通过DataStream APi 往iceberg 写数据
-        FlinkSink.forRowData(dStremMor)
-                .writeParallelism(sinkParallelism)
-                .table(table)
-                .tableLoader(tableLoader)
-                .tableSchema(FlinkSchemaUtil.toSchema(table.schema()))
-                .equalityFieldColumns(identifierFieldNameList)
-                .upsert(config.get(IcebergDataSinkOptions.UPSERT_MODE))
-                .overwrite(config.get(IcebergDataSinkOptions.OVERWRITE_MODE))
-                .append();
+        buildIcebergSink(
+                dataStream,
+                schemaOperatorId,
+                uidPrefix,
+                sinkParallelism,
+                table,
+                identifierFieldNameList,
+                tableLoader);
     }
 
     private DataStream<RowData> serializerDataStream(
@@ -132,6 +131,7 @@ public class IcebergSink implements CustomSink<Event>, Serializable {
         HadoopCatalog hadoopCatalog = new HadoopCatalog(conf, warehouse);
         String database = config.getOptional(IcebergDataSinkOptions.DATABASE).get();
         String tableName = config.getOptional(IcebergDataSinkOptions.TABLENAME).get();
+        String uidPrefix = config.get(IcebergDataSinkOptions.UID_PREFIX);
         int sinkParallelism = config.getOptional(IcebergDataSinkOptions.SINK_PARALLELISM).get();
         TableIdentifier identifier = TableIdentifier.of(Namespace.of(database), tableName);
         Table table = hadoopCatalog.loadTable(identifier);
@@ -139,15 +139,37 @@ public class IcebergSink implements CustomSink<Event>, Serializable {
         List<String> identifierFieldNameList = new ArrayList<>();
         identifierFieldNameList.addAll(identifierFieldNameSet);
         final TableLoader tableLoader = TableLoader.fromHadoopTable(warehouse + tableName, conf);
+        buildIcebergSink(
+                dataStream,
+                schemaOperatorId,
+                uidPrefix,
+                sinkParallelism,
+                table,
+                identifierFieldNameList,
+                tableLoader);
+    }
+
+    private void buildIcebergSink(
+            DataStream<Event> dataStream,
+            OperatorID schemaOperatorId,
+            String uidPrefix,
+            int sinkParallelism,
+            Table table,
+            List<String> identifierFieldNameList,
+            TableLoader tableLoader) {
         DataStream<RowData> dStremMor = serializerDataStream(dataStream, table, schemaOperatorId);
-        FlinkSink.forRowData(dStremMor)
-                .writeParallelism(sinkParallelism)
-                .table(table)
-                .tableLoader(tableLoader)
-                .tableSchema(FlinkSchemaUtil.toSchema(table.schema()))
-                .equalityFieldColumns(identifierFieldNameList)
-                .upsert(config.get(IcebergDataSinkOptions.UPSERT_MODE))
-                .overwrite(config.get(IcebergDataSinkOptions.OVERWRITE_MODE))
-                .append();
+        FlinkSink.Builder builder =
+                FlinkSink.forRowData(dStremMor)
+                        .writeParallelism(sinkParallelism)
+                        .table(table)
+                        .tableLoader(tableLoader)
+                        .tableSchema(FlinkSchemaUtil.toSchema(table.schema()))
+                        .equalityFieldColumns(identifierFieldNameList)
+                        .upsert(config.get(IcebergDataSinkOptions.UPSERT_MODE))
+                        .overwrite(config.get(IcebergDataSinkOptions.OVERWRITE_MODE));
+        if (StringUtils.isNotBlank(uidPrefix)) {
+            builder.uidPrefix(uidPrefix);
+        }
+        builder.append();
     }
 }

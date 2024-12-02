@@ -97,6 +97,13 @@ public class IcebergDataSinkOptions {
                     .withDescription(
                             "The contents of the additional configuration file hive-site.xml (set in `sink.catalog.hive.conf.location` or `pipeline.additional-files`).");
 
+    public static final ConfigOption<String> UID_PREFIX =
+            ConfigOptions.key("uid.prefix")
+                    .stringType()
+                    .noDefaultValue()
+                    .withDescription(
+                            "The uid prefix of the iceberg sink, used to identify different data flows or tasks.");
+
     public static Map<String, String> getPropertiesByPrefix(
             Configuration tableOptions, String prefix) {
         final Map<String, String> props = new HashMap<>();
