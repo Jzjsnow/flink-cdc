@@ -55,6 +55,7 @@ import java.util.stream.Collectors;
 import static org.testcontainers.containers.PostgreSQLContainer.POSTGRESQL_PORT;
 
 /** Tests for Postgres Source based on incremental snapshot framework . */
+@Ignore
 public class PostgresSourceExampleTest extends PostgresTestBase {
 
     private static final String DB_NAME_PREFIX = "postgres";

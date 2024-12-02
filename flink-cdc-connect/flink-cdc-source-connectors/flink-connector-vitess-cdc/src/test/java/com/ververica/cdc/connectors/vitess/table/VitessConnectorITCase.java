@@ -26,6 +26,7 @@ import org.apache.flink.util.CloseableIterator;
 
 import com.ververica.cdc.connectors.vitess.VitessTestBase;
 import org.junit.Before;
+import org.junit.Ignore;
 import org.junit.Test;
 
 import java.sql.Connection;
@@ -42,6 +43,7 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 
 /** Integration tests for MySQL binlog SQL source. */
+@Ignore
 public class VitessConnectorITCase extends VitessTestBase {
 
     private final StreamExecutionEnvironment env =

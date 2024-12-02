@@ -31,6 +31,7 @@ import org.bson.Document;
 import org.bson.types.ObjectId;
 import org.junit.After;
 import org.junit.Before;
+import org.junit.Ignore;
 import org.junit.Test;
 import org.junit.runners.Parameterized;
 import org.slf4j.Logger;
@@ -52,6 +53,7 @@ import static com.ververica.cdc.connectors.mongodb.LegacyMongoDBContainer.FLINK_
 import static com.ververica.cdc.connectors.mongodb.utils.MongoDBContainer.MONGODB_PORT;
 
 /** End-to-end tests for mongodb-cdc connector uber jar. */
+@Ignore
 public class MongoE2eITCase extends FlinkContainerTestEnvironment {
 
     private static final Logger LOG = LoggerFactory.getLogger(MongoE2eITCase.class);

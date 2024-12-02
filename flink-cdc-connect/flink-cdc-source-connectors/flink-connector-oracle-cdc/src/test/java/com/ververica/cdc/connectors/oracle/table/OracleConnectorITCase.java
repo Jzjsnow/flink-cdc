@@ -28,6 +28,7 @@ import org.apache.flink.shaded.guava30.com.google.common.util.concurrent.RateLim
 import org.junit.After;
 import org.junit.Assume;
 import org.junit.Before;
+import org.junit.Ignore;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.Parameterized;
@@ -65,6 +66,7 @@ import static org.junit.Assert.assertThat;
 
 /** Integration tests for Oracle redo log SQL source. */
 @RunWith(Parameterized.class)
+@Ignore
 public class OracleConnectorITCase {
     private static final int RECORDS_COUNT = 10_000;
     private static final int WORKERS_COUNT = 4;

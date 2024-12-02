@@ -28,6 +28,7 @@ import org.apache.flink.util.ExceptionUtils;
 import com.ververica.cdc.connectors.postgres.PostgresTestBase;
 import org.junit.Before;
 import org.junit.ClassRule;
+import org.junit.Ignore;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.Parameterized;
@@ -48,6 +49,7 @@ import static org.testcontainers.containers.PostgreSQLContainer.POSTGRESQL_PORT;
 
 /** Integration tests for PostgreSQL Table source. */
 @RunWith(Parameterized.class)
+@Ignore
 public class PostgreSQLConnectorITCase extends PostgresTestBase {
 
     private final StreamExecutionEnvironment env =

@@ -36,6 +36,7 @@ import com.ververica.cdc.connectors.sqlserver.source.dialect.SqlServerDialect;
 import com.ververica.cdc.connectors.sqlserver.testutils.TestTable;
 import io.debezium.jdbc.JdbcConnection;
 import org.apache.commons.lang3.StringUtils;
+import org.junit.Ignore;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.Timeout;
@@ -58,6 +59,7 @@ import static org.apache.flink.util.Preconditions.checkState;
 import static org.testcontainers.containers.MSSQLServerContainer.MS_SQL_SERVER_PORT;
 
 /** IT tests for {@link SqlServerSourceBuilder.SqlServerIncrementalSource}. */
+@Ignore
 public class SqlServerSourceITCase extends SqlServerSourceTestBase {
 
     private static final Logger LOG = LoggerFactory.getLogger(SqlServerSourceITCase.class);

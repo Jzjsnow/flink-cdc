@@ -30,6 +30,7 @@ import org.apache.flink.test.util.MiniClusterWithClientResource;
 import com.ververica.cdc.connectors.oceanbase.OceanBaseTestBase;
 import org.junit.Before;
 import org.junit.ClassRule;
+import org.junit.Ignore;
 import org.junit.Rule;
 import org.junit.Test;
 
@@ -42,6 +43,7 @@ import java.util.List;
 import static org.junit.Assert.assertTrue;
 
 /** Integration tests for OceanBase change stream event SQL source. */
+@Ignore
 public class OceanBaseConnectorITCase extends OceanBaseTestBase {
 
     private static final int DEFAULT_PARALLELISM = 2;

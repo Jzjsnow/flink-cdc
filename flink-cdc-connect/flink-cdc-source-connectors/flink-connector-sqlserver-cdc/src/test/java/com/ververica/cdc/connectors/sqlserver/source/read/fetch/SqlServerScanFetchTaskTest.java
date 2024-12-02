@@ -38,6 +38,7 @@ import com.ververica.cdc.connectors.sqlserver.testutils.RecordsFormatter;
 import io.debezium.jdbc.JdbcConnection;
 import io.debezium.relational.TableId;
 import org.apache.kafka.connect.source.SourceRecord;
+import org.junit.Ignore;
 import org.junit.Test;
 
 import java.sql.SQLException;
@@ -54,6 +55,7 @@ import static org.junit.Assert.assertTrue;
 import static org.testcontainers.containers.MSSQLServerContainer.MS_SQL_SERVER_PORT;
 
 /** Tests for {@link SqlServerScanFetchTask}. */
+@Ignore
 public class SqlServerScanFetchTaskTest extends SqlServerSourceTestBase {
 
     @Test

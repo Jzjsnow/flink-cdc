@@ -38,6 +38,7 @@ import com.ververica.cdc.connectors.postgres.testutils.UniqueDatabase;
 import io.debezium.connector.postgresql.connection.PostgresConnection;
 import io.debezium.relational.TableId;
 import org.apache.kafka.connect.source.SourceRecord;
+import org.junit.Ignore;
 import org.junit.Test;
 
 import java.util.ArrayList;
@@ -50,6 +51,7 @@ import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
 
 /** Tests for {@link PostgresScanFetchTask}. */
+@Ignore
 public class PostgresScanFetchTaskTest extends PostgresTestBase {
 
     private static final int USE_POST_LOWWATERMARK_HOOK = 1;

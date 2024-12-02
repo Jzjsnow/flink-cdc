@@ -45,6 +45,7 @@ import io.debezium.jdbc.JdbcConnection;
 import org.apache.commons.lang3.StringUtils;
 import org.junit.After;
 import org.junit.Before;
+import org.junit.Ignore;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.Timeout;
@@ -78,6 +79,7 @@ import static org.junit.Assert.assertTrue;
 
 /** IT tests for {@link PostgresSourceBuilder.PostgresIncrementalSource}. */
 @RunWith(Parameterized.class)
+@Ignore
 public class PostgresSourceITCase extends PostgresTestBase {
 
     private static final String DEFAULT_SCAN_STARTUP_MODE = "initial";

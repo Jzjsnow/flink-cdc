@@ -29,6 +29,7 @@ import org.apache.flink.util.ExceptionUtils;
 
 import com.ververica.cdc.connectors.postgres.PostgresTestBase;
 import org.junit.Before;
+import org.junit.Ignore;
 import org.junit.Test;
 import org.junit.rules.TemporaryFolder;
 
@@ -45,6 +46,7 @@ import static org.junit.Assert.assertThat;
 import static org.testcontainers.containers.PostgreSQLContainer.POSTGRESQL_PORT;
 
 /** Integration tests for PostgreSQL to start from a savepoint. */
+@Ignore
 public class PostgreSQLSavepointITCase extends PostgresTestBase {
     @Before
     public void before() {

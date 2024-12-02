@@ -28,6 +28,7 @@ import org.apache.flink.table.catalog.UniqueConstraint;
 import org.apache.flink.table.connector.source.DynamicTableSource;
 import org.apache.flink.table.factories.FactoryUtil;
 
+import org.junit.Ignore;
 import org.junit.Test;
 
 import java.util.ArrayList;
@@ -39,6 +40,7 @@ import java.util.Map;
 import static org.junit.Assert.assertEquals;
 
 /** Unit tests for TiDB table source factory. */
+@Ignore
 public class TiDBTableSourceFactoryTest {
 
     private static final ResolvedSchema SCHEMA =

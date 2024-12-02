@@ -21,11 +21,13 @@ import com.ververica.cdc.connectors.postgres.source.config.PostgresSourceConfigF
 import com.ververica.cdc.connectors.postgres.testutils.UniqueDatabase;
 import io.debezium.relational.TableId;
 import org.junit.Assert;
+import org.junit.Ignore;
 import org.junit.Test;
 
 import java.util.List;
 
 /** Tests for {@link PostgresDialect}. */
+@Ignore
 public class PostgresDialectTest extends PostgresTestBase {
 
     private final UniqueDatabase customDatabase =

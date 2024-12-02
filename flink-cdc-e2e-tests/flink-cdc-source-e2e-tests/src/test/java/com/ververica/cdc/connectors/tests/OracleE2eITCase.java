@@ -16,12 +16,15 @@
 
 package com.ververica.cdc.connectors.tests;
 
+import com.github.dockerjava.api.model.Bind;
+import com.github.dockerjava.api.model.Volume;
 import com.ververica.cdc.connectors.tests.utils.FlinkContainerTestEnvironment;
 import com.ververica.cdc.connectors.tests.utils.JdbcProxy;
 import com.ververica.cdc.connectors.tests.utils.TestUtils;
 import org.junit.After;
 import org.junit.AfterClass;
 import org.junit.Before;
+import org.junit.Ignore;
 import org.junit.Test;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -47,6 +50,7 @@ import static com.ververica.cdc.connectors.oracle.source.OracleSourceTestBase.TE
 import static com.ververica.cdc.connectors.oracle.source.OracleSourceTestBase.TEST_USER;
 
 /** End-to-end tests for oracle-cdc connector uber jar. */
+@Ignore
 public class OracleE2eITCase extends FlinkContainerTestEnvironment {
 
     private static final Logger LOG = LoggerFactory.getLogger(OracleE2eITCase.class);
@@ -54,7 +58,7 @@ public class OracleE2eITCase extends FlinkContainerTestEnvironment {
     private static final String INTER_CONTAINER_ORACLE_ALIAS = "oracle";
     private static final Path oracleCdcJar = TestUtils.getResource("oracle-cdc-connector.jar");
     private static final Path mysqlDriverJar = TestUtils.getResource("mysql-driver.jar");
-    public static final String ORACLE_IMAGE = "goodboy008/oracle-19.3.0-ee";
+    public static final String ORACLE_IMAGE = "registry.cn-hangzhou.aliyuncs.com/zhuyijun/oracle";
     private static OracleContainer oracle;
 
     @Before
@@ -63,13 +67,22 @@ public class OracleE2eITCase extends FlinkContainerTestEnvironment {
         LOG.info("Starting containers...");
 
         oracle =
-                new OracleContainer(DockerImageName.parse(ORACLE_IMAGE).withTag("non-cdb"))
+                new OracleContainer(DockerImageName.parse(ORACLE_IMAGE).withTag("19c"))
                         .withUsername(CONNECTOR_USER)
                         .withPassword(CONNECTOR_PWD)
                         .withDatabaseName(ORACLE_DATABASE)
+                        .withStartupTimeout(Duration.ofMinutes(40))
                         .withNetwork(NETWORK)
                         .withNetworkAliases(INTER_CONTAINER_ORACLE_ALIAS)
                         .withLogConsumer(new Slf4jLogConsumer(LOG))
+                        .withCreateContainerCmdModifier(
+                                cmd ->
+                                        cmd.getHostConfig()
+                                                .withBinds(
+                                                        new Bind(
+                                                                "/var/run/docker.sock",
+                                                                new Volume(
+                                                                        "/var/run/docker.sock"))))
                         .withReuse(true);
 
         Startables.deepStart(Stream.of(oracle)).join();

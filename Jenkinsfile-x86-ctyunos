@@ -28,7 +28,7 @@ pipeline {
         DEV_BRANCH = "FLINK-CDC-.*" //开发临时分支
         RELEASE_TAG = ".*release" //发布分支或者tag
         //QA_TAG = "v\\d+\\.\\d+.\\d+(-\\d+)?" // v1.0.0-01
-        
+
     }
 
     stages {
@@ -141,7 +141,7 @@ pipeline {
                     steps {
                         script {
                                 sh """
-                                    // sed -i 's#{{SONAR_PROJECT_NAME}}#'$DEPLOYMENT_NAME'#g' sonar-project.properties
+                                    # sed -i 's#{{SONAR_PROJECT_NAME}}#'$DEPLOYMENT_NAME'#g' sonar-project.properties
                                 """
                                 echo 'skip'
                                 //devops.scan().start()

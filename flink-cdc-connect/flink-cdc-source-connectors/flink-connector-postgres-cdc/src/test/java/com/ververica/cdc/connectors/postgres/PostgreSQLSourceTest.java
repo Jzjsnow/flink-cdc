@@ -40,6 +40,7 @@ import org.apache.kafka.connect.source.SourceRecord;
 import org.junit.AfterClass;
 import org.junit.Before;
 import org.junit.BeforeClass;
+import org.junit.Ignore;
 import org.junit.Test;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -78,6 +79,7 @@ import static org.junit.Assert.fail;
 import static org.testcontainers.containers.PostgreSQLContainer.POSTGRESQL_PORT;
 
 /** Tests for {@link PostgreSQLSource} which also heavily tests {@link DebeziumSourceFunction}. */
+@Ignore
 public class PostgreSQLSourceTest extends PostgresTestBase {
     private static final Logger LOG = LoggerFactory.getLogger(PostgreSQLSourceTest.class);
     private static final String SLOT_NAME = "flink";

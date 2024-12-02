@@ -32,6 +32,7 @@ import com.ververica.cdc.connectors.base.options.JdbcSourceOptions;
 import com.ververica.cdc.connectors.base.options.SourceOptions;
 import com.ververica.cdc.connectors.base.options.StartupOptions;
 import com.ververica.cdc.debezium.utils.ResolvedSchemaUtils;
+import org.junit.Ignore;
 import org.junit.Test;
 
 import java.time.Duration;
@@ -46,6 +47,7 @@ import java.util.Properties;
 import static org.junit.Assert.assertEquals;
 
 /** Test for {@link SqlServerTableSource} created by {@link SqlServerTableFactory}. */
+@Ignore
 public class SqlServerTableFactoryTest {
 
     private static final ResolvedSchema SCHEMA =

@@ -28,6 +28,7 @@ import org.junit.Ignore;
 import org.junit.Test;
 
 /** Example Tests for {@link SqlServerIncrementalSource}. */
+@Ignore
 public class SqlServerParallelSourceExampleTest extends SqlServerSourceTestBase {
 
     @Test

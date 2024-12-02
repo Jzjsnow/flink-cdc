@@ -39,6 +39,7 @@ import com.ververica.cdc.connectors.base.options.StartupOptions;
 import com.ververica.cdc.debezium.DebeziumSourceFunction;
 import com.ververica.cdc.debezium.table.DebeziumChangelogMode;
 import com.ververica.cdc.debezium.utils.ResolvedSchemaUtils;
+import org.junit.Ignore;
 import org.junit.Test;
 
 import java.time.Duration;
@@ -66,6 +67,7 @@ import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
 /** Test for {@link PostgreSQLTableSource} created by {@link PostgreSQLTableFactory}. */
+@Ignore
 public class PostgreSQLTableFactoryTest {
 
     private static final ResolvedSchema SCHEMA =

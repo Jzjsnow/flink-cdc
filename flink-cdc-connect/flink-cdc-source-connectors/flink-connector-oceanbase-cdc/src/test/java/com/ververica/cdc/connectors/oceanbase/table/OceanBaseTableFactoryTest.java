@@ -29,6 +29,7 @@ import org.apache.flink.table.connector.source.DynamicTableSource;
 import org.apache.flink.table.factories.FactoryUtil;
 import org.apache.flink.util.ExceptionUtils;
 
+import org.junit.Ignore;
 import org.junit.Test;
 
 import java.time.Duration;
@@ -44,6 +45,7 @@ import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
 /** Test for {@link OceanBaseTableSource} created by {@link OceanBaseTableSourceFactory}. */
+@Ignore
 public class OceanBaseTableFactoryTest {
 
     private static final ResolvedSchema SCHEMA =

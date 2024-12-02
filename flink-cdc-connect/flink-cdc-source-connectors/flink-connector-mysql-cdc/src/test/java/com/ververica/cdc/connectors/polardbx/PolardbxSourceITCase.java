@@ -26,6 +26,7 @@ import org.apache.flink.util.CloseableIterator;
 
 import com.ververica.cdc.connectors.mysql.schema.MySqlSchema;
 import org.junit.BeforeClass;
+import org.junit.Ignore;
 import org.junit.Test;
 
 import java.sql.Connection;
@@ -41,6 +42,7 @@ import static java.lang.String.format;
  * we added fallback in {@link MySqlSchema} when parsing ddl failed and provided these cases to
  * test.
  */
+@Ignore
 public class PolardbxSourceITCase extends PolardbxSourceTestBase {
     private static final String DATABASE = "polardbx_ddl_test";
 

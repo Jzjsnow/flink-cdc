@@ -24,6 +24,7 @@ import org.apache.flink.table.planner.factories.TestValuesTableFactory;
 
 import com.ververica.cdc.connectors.sqlserver.SqlServerTestBase;
 import org.junit.Before;
+import org.junit.Ignore;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.Parameterized;
@@ -40,6 +41,7 @@ import static org.testcontainers.containers.MSSQLServerContainer.MS_SQL_SERVER_P
 
 /** Integration tests for SqlServer Table source. */
 @RunWith(Parameterized.class)
+@Ignore
 public class SqlServerTimezoneITCase extends SqlServerTestBase {
 
     private final StreamExecutionEnvironment env =

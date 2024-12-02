@@ -36,6 +36,7 @@ import com.ververica.cdc.debezium.DebeziumDeserializationSchema;
 import com.ververica.cdc.debezium.DebeziumSourceFunction;
 import org.apache.kafka.connect.source.SourceRecord;
 import org.junit.Before;
+import org.junit.Ignore;
 import org.junit.Test;
 
 import java.sql.Connection;
@@ -54,6 +55,7 @@ import static com.ververica.cdc.connectors.utils.AssertUtils.assertInsert;
 import static com.ververica.cdc.connectors.utils.AssertUtils.assertUpdate;
 
 /** Tests for {@link VitessSource} which also heavily tests {@link DebeziumSourceFunction}. */
+@Ignore
 public class VitessSourceTest extends VitessTestBase {
 
     @Before

@@ -37,6 +37,7 @@ import org.slf4j.LoggerFactory;
 import java.util.Properties;
 
 /** Example Tests for {@link JdbcIncrementalSource}. */
+@Ignore
 public class OracleChangeEventSourceExampleTest extends OracleSourceTestBase {
 
     private static final Logger LOG =

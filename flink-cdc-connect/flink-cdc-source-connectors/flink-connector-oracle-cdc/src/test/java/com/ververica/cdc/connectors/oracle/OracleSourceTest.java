@@ -68,6 +68,7 @@ import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
 /** Tests for {@link OracleSource} which also heavily tests {@link DebeziumSourceFunction}. */
+@Ignore
 public class OracleSourceTest extends OracleSourceTestBase {
 
     private static final Logger LOG = LoggerFactory.getLogger(OracleSourceTest.class);

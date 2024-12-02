@@ -109,10 +109,10 @@ pipeline {
                         sh """echo $WORKSPACE"""
                         if(BRANCH_NAME ==~ env.MASTER_BRANCH || BRANCH_NAME ==~ env.DEV_BRANCH){
                         //The uid and gid correspond to the flinkci user in the docker image
-                            sh """chown -R 9999:9999 $WORKSPACE && docker run --privileged --rm --cpus="6" -m 12g --user flinkci -v $WORKSPACE:/home/flinkci/flinkcdc -v /data1/flinkcdc/maven:/home/flinkci/.m2/repository -v /var/run/docker.sock:/var/run/docker.sock harbor.ctyuncdn.cn/bdyun/basic-image/amd-ctyunos-flinkcdc:v1.0.0 /bin/bash -c \"cd /home/flinkci/flinkcdc && mvn clean install -Dscala-2.12\""""
+                            sh """chown -R 9999:9999 $WORKSPACE && docker run --privileged --rm --cpus="6" -m 12g --user flinkci -v $WORKSPACE:/home/flinkci/flinkcdc -v /data1/flinkcdc/maven:/home/flinkci/.m2/repository -v /var/run/docker.sock:/var/run/docker.sock harbor.ctyuncdn.cn/bdyun/basic-image/arm-ctyunos-flinkcdc:v1.0.0 /bin/bash -c \"cd /home/flinkci/flinkcdc && mvn clean install -Dscala-2.12\""""
 
                         }else{
-                            sh """chown -R 9999:9999 $WORKSPACE && docker run --privileged --rm --cpus="6" -m 12g --user flinkci -v $WORKSPACE:/home/flinkci/flinkcdc -v /data1/flink/maven:/home/flinkci/.m2/repository harbor.ctyuncdn.cn/bdyun/basic-image/amd-ctyunos-flink:v1.0.0 /bin/bash -c \"cd /home/flinkci/flinkcdc && mvn clean install -DskipTests -Dfast  -Dscala-2.12\""""
+                            sh """chown -R 9999:9999 $WORKSPACE && docker run --privileged --rm --cpus="6" -m 12g --user flinkci -v $WORKSPACE:/home/flinkci/flinkcdc -v /data1/flink/maven:/home/flinkci/.m2/repository harbor.ctyuncdn.cn/bdyun/basic-image/arm-ctyunos-flink:v1.0.0 /bin/bash -c \"cd /home/flinkci/flinkcdc && mvn clean install -DskipTests -Dfast  -Dscala-2.12\""""
                         }
                         BUILD_RESULT = devops.updateBuildTasks(BUILD_RESULT,"Build-Package OK...√")
                 }
@@ -140,7 +140,7 @@ pipeline {
                     steps {
                         script {
                                 sh """
-                                    // sed -i 's#{{SONAR_PROJECT_NAME}}#'$DEPLOYMENT_NAME'#g' sonar-project.properties
+                                    # sed -i 's#{{SONAR_PROJECT_NAME}}#'$DEPLOYMENT_NAME'#g' sonar-project.properties
                                 """
                                 echo 'skip'
                                 //devops.scan().start()

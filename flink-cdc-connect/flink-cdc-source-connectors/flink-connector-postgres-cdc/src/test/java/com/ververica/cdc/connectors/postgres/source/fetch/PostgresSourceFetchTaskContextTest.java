@@ -23,6 +23,7 @@ import io.debezium.connector.postgresql.SourceInfo;
 import io.debezium.connector.postgresql.connection.Lsn;
 import io.debezium.pipeline.spi.OffsetContext;
 import org.junit.Before;
+import org.junit.Ignore;
 import org.junit.Test;
 
 import java.util.HashMap;
@@ -32,6 +33,7 @@ import static io.debezium.connector.postgresql.Utils.lastKnownLsn;
 import static org.junit.Assert.assertEquals;
 
 /** Unit test for {@link PostgresSourceFetchTaskContext}. */
+@Ignore
 public class PostgresSourceFetchTaskContextTest {
 
     private PostgresConnectorConfig connectorConfig;

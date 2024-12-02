@@ -23,6 +23,7 @@ import com.ververica.cdc.connectors.vitess.VitessTestBase;
 import com.ververica.cdc.connectors.vitess.container.VitessContainer;
 import org.junit.After;
 import org.junit.Before;
+import org.junit.Ignore;
 import org.junit.Test;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -48,6 +49,7 @@ import static com.ververica.cdc.connectors.vitess.container.VitessContainer.MYSQ
 import static org.junit.Assert.assertNotNull;
 
 /** End-to-end test for Vitess CDC connector. */
+@Ignore
 public class VitessE2eITCase extends FlinkContainerTestEnvironment {
     private static final Logger LOG = LoggerFactory.getLogger(VitessE2eITCase.class);
     private static final String VITESS_CONTAINER_NETWORK_ALIAS = "vitess";

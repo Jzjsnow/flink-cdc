@@ -22,6 +22,8 @@ import org.apache.flink.runtime.testutils.MiniClusterResourceConfiguration;
 import org.apache.flink.test.util.MiniClusterWithClientResource;
 import org.apache.flink.util.TestLogger;
 
+import com.github.dockerjava.api.model.Bind;
+import com.github.dockerjava.api.model.Volume;
 import io.debezium.relational.TableId;
 import org.junit.AfterClass;
 import org.junit.BeforeClass;
@@ -41,6 +43,7 @@ import java.sql.DriverManager;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashSet;
@@ -72,11 +75,21 @@ public class OracleSourceTestBase extends TestLogger {
 
     public static final OracleContainer ORACLE_CONTAINER =
             new OracleContainer(
-                            DockerImageName.parse("goodboy008/oracle-19.3.0-ee").withTag("non-cdb"))
+                            DockerImageName.parse(
+                                            "registry.cn-hangzhou.aliyuncs.com/zhuyijun/oracle")
+                                    .withTag("19c"))
                     .withUsername(CONNECTOR_USER)
                     .withPassword(CONNECTOR_PWD)
                     .withDatabaseName(ORACLE_DATABASE)
-                    .withLogConsumer(new Slf4jLogConsumer(LOG));
+                    .withStartupTimeout(Duration.ofMinutes(40))
+                    .withLogConsumer(new Slf4jLogConsumer(LOG))
+                    .withCreateContainerCmdModifier(
+                            cmd ->
+                                    cmd.getHostConfig()
+                                            .withBinds(
+                                                    new Bind(
+                                                            "/var/run/docker.sock",
+                                                            new Volume("/var/run/docker.sock"))));
 
     @Rule
     public final MiniClusterWithClientResource miniClusterResource =

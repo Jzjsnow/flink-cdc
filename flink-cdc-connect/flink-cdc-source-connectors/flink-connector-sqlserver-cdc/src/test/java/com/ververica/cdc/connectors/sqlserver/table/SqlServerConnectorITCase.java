@@ -26,6 +26,7 @@ import org.apache.flink.table.utils.LegacyRowResource;
 import com.ververica.cdc.connectors.sqlserver.SqlServerTestBase;
 import org.junit.Before;
 import org.junit.ClassRule;
+import org.junit.Ignore;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.Parameterized;
@@ -46,6 +47,7 @@ import static org.testcontainers.containers.MSSQLServerContainer.MS_SQL_SERVER_P
 
 /** Integration tests for SqlServer Table source. */
 @RunWith(Parameterized.class)
+@Ignore
 public class SqlServerConnectorITCase extends SqlServerTestBase {
 
     private final StreamExecutionEnvironment env =

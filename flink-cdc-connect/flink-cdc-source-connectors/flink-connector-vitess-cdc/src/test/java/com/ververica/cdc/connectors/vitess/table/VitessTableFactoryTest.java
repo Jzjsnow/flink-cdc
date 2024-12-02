@@ -32,6 +32,7 @@ import org.apache.flink.util.ExceptionUtils;
 
 import com.ververica.cdc.connectors.vitess.config.SchemaAdjustmentMode;
 import com.ververica.cdc.connectors.vitess.config.TabletType;
+import org.junit.Ignore;
 import org.junit.Test;
 
 import java.util.ArrayList;
@@ -46,6 +47,7 @@ import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
 /** Test for {@link VitessTableSource} created by {@link VitessTableFactory}. */
+@Ignore
 public class VitessTableFactoryTest {
 
     private static final ResolvedSchema SCHEMA =

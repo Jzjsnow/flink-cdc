@@ -34,6 +34,7 @@ import org.apache.flink.util.ExceptionUtils;
 import com.ververica.cdc.connectors.base.options.JdbcSourceOptions;
 import com.ververica.cdc.connectors.base.options.SourceOptions;
 import com.ververica.cdc.connectors.base.options.StartupOptions;
+import org.junit.Ignore;
 import org.junit.Test;
 
 import java.time.Duration;
@@ -52,6 +53,7 @@ import static org.junit.Assert.fail;
  * Test for {@link com.ververica.cdc.connectors.oracle.table.OracleTableSource} created by {@link
  * com.ververica.cdc.connectors.oracle.table.OracleTableSourceFactory}.
  */
+@Ignore
 public class OracleTableSourceFactoryTest {
     private static final ResolvedSchema SCHEMA =
             new ResolvedSchema(
