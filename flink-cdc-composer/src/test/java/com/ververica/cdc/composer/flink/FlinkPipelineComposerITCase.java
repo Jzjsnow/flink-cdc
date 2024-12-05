@@ -28,6 +28,7 @@ import com.ververica.cdc.common.event.Event;
 import com.ververica.cdc.common.event.RenameColumnEvent;
 import com.ververica.cdc.common.event.TableId;
 import com.ververica.cdc.common.pipeline.PipelineOptions;
+import com.ververica.cdc.common.pipeline.SchemaChangeBehavior;
 import com.ververica.cdc.common.schema.Column;
 import com.ververica.cdc.common.schema.Schema;
 import com.ververica.cdc.common.types.DataType;
@@ -149,6 +150,9 @@ class FlinkPipelineComposerITCase {
 
         // Check the order and content of all received events
         String[] outputEvents = outCaptor.toString().trim().split("\n");
+        for (int i = 0; i < outputEvents.length; i++) {
+            outputEvents[i] = outputEvents[i].trim();
+        }
         assertThat(outputEvents)
                 .containsExactly(
                         "CreateTableEvent{tableId=default_namespace.default_schema.table1, schema=columns={`col1` STRING,`col2` STRING}, primaryKeys=col1, options=()}",
@@ -211,6 +215,9 @@ class FlinkPipelineComposerITCase {
 
         // Check the order and content of all received events
         String[] outputEvents = outCaptor.toString().trim().split("\n");
+        for (int i = 0; i < outputEvents.length; i++) {
+            outputEvents[i] = outputEvents[i].trim();
+        }
         assertThat(outputEvents)
                 .containsExactly(
                         "CreateTableEvent{tableId=default_namespace.default_schema.table1, schema=columns={`col1` STRING,`col2` STRING}, primaryKeys=col1, options=()}",
@@ -299,6 +306,8 @@ class FlinkPipelineComposerITCase {
         // Setup pipeline
         Configuration pipelineConfig = new Configuration();
         pipelineConfig.set(PipelineOptions.PIPELINE_PARALLELISM, 1);
+        pipelineConfig.set(
+                PipelineOptions.PIPELINE_SCHEMA_CHANGE_BEHAVIOR, SchemaChangeBehavior.EVOLVE);
         PipelineDef pipelineDef =
                 new PipelineDef(
                         sourceDef, sinkDef, routeDef, Collections.emptyList(), pipelineConfig);
@@ -322,6 +331,9 @@ class FlinkPipelineComposerITCase {
 
         // Check the order and content of all received events
         String[] outputEvents = outCaptor.toString().trim().split("\n");
+        for (int i = 0; i < outputEvents.length; i++) {
+            outputEvents[i] = outputEvents[i].trim();
+        }
         assertThat(outputEvents)
                 .containsExactly(
                         "CreateTableEvent{tableId=default_namespace.default_schema.routed1, schema=columns={`col1` STRING,`col2` STRING}, primaryKeys=col1, options=()}",
@@ -329,12 +341,12 @@ class FlinkPipelineComposerITCase {
                         "DataChangeEvent{tableId=default_namespace.default_schema.routed1, before=[], after=[1, 1], op=INSERT, meta=()}",
                         "DataChangeEvent{tableId=default_namespace.default_schema.routed1, before=[], after=[2, 2], op=INSERT, meta=()}",
                         "DataChangeEvent{tableId=default_namespace.default_schema.routed1, before=[], after=[3, 3], op=INSERT, meta=()}",
-                        "AddColumnEvent{tableId=default_namespace.default_schema.routed1, addedColumns=[ColumnWithPosition{column=`col3` STRING, position=LAST, existedColumnName=null}]}",
+                        "AddColumnEvent{tableId=default_namespace.default_schema.routed1, addedColumns=[ColumnWithPosition{column=`col3` STRING, position=LAST, existingColumn=null}]}",
                         "DataChangeEvent{tableId=default_namespace.default_schema.routed2, before=[], after=[1, 1], op=INSERT, meta=()}",
                         "DataChangeEvent{tableId=default_namespace.default_schema.routed2, before=[], after=[2, 2], op=INSERT, meta=()}",
                         "DataChangeEvent{tableId=default_namespace.default_schema.routed2, before=[], after=[3, 3], op=INSERT, meta=()}",
                         "RenameColumnEvent{tableId=default_namespace.default_schema.routed1, nameMapping={col2=newCol2, col3=newCol3}}",
-                        "DropColumnEvent{tableId=default_namespace.default_schema.routed1, droppedColumnNames=[newCol2]}",
+                        "DropColumnEvent{tableId=default_namespace.default_schema.routed1, droppedColumns=[`newCol2` STRING]}",
                         "DataChangeEvent{tableId=default_namespace.default_schema.routed1, before=[1, 1], after=[], op=DELETE, meta=()}",
                         "DataChangeEvent{tableId=default_namespace.default_schema.routed1, before=[2, 2], after=[2, x], op=UPDATE, meta=()}");
     }
@@ -490,6 +502,8 @@ class FlinkPipelineComposerITCase {
         // Setup pipeline
         Configuration pipelineConfig = new Configuration();
         pipelineConfig.set(PipelineOptions.PIPELINE_PARALLELISM, 1);
+        pipelineConfig.set(
+                PipelineOptions.PIPELINE_SCHEMA_CHANGE_BEHAVIOR, SchemaChangeBehavior.EVOLVE);
         PipelineDef pipelineDef =
                 new PipelineDef(
                         sourceDef, sinkDef, routeDef, Collections.emptyList(), pipelineConfig);
@@ -510,19 +524,22 @@ class FlinkPipelineComposerITCase {
                                 .primaryKey("id")
                                 .build());
         String[] outputEvents = outCaptor.toString().trim().split("\n");
+        for (int i = 0; i < outputEvents.length; i++) {
+            outputEvents[i] = outputEvents[i].trim();
+        }
         assertThat(outputEvents)
                 .containsExactly(
                         "CreateTableEvent{tableId=default_namespace.default_schema.merged, schema=columns={`id` INT,`name` STRING,`age` INT}, primaryKeys=id, options=()}",
                         "DataChangeEvent{tableId=default_namespace.default_schema.merged, before=[], after=[1, Alice, 18], op=INSERT, meta=()}",
                         "DataChangeEvent{tableId=default_namespace.default_schema.merged, before=[], after=[2, Bob, 20], op=INSERT, meta=()}",
                         "DataChangeEvent{tableId=default_namespace.default_schema.merged, before=[2, Bob, 20], after=[2, Bob, 30], op=UPDATE, meta=()}",
-                        "AddColumnEvent{tableId=default_namespace.default_schema.merged, addedColumns=[ColumnWithPosition{column=`description` STRING, position=LAST, existedColumnName=null}]}",
+                        "AddColumnEvent{tableId=default_namespace.default_schema.merged, addedColumns=[ColumnWithPosition{column=`description` STRING, position=LAST, existingColumn=null}]}",
                         "AlterColumnTypeEvent{tableId=default_namespace.default_schema.merged, nameMapping={age=BIGINT, id=BIGINT}}",
                         "DataChangeEvent{tableId=default_namespace.default_schema.merged, before=[], after=[3, Charlie, 15, student], op=INSERT, meta=()}",
                         "DataChangeEvent{tableId=default_namespace.default_schema.merged, before=[], after=[4, Donald, 25, student], op=INSERT, meta=()}",
                         "DataChangeEvent{tableId=default_namespace.default_schema.merged, before=[4, Donald, 25, student], after=[], op=DELETE, meta=()}",
-                        "AddColumnEvent{tableId=default_namespace.default_schema.merged, addedColumns=[ColumnWithPosition{column=`last_name` STRING, position=LAST, existedColumnName=null}]}",
-                        "AddColumnEvent{tableId=default_namespace.default_schema.merged, addedColumns=[ColumnWithPosition{column=`gender` STRING, position=LAST, existedColumnName=null}]}",
+                        "AddColumnEvent{tableId=default_namespace.default_schema.merged, addedColumns=[ColumnWithPosition{column=`last_name` STRING, position=LAST, existingColumn=null}]}",
+                        "AddColumnEvent{tableId=default_namespace.default_schema.merged, addedColumns=[ColumnWithPosition{column=`gender` STRING, position=LAST, existingColumn=null}]}",
                         "DataChangeEvent{tableId=default_namespace.default_schema.merged, before=[], after=[5, null, 24, null, Eliza, null], op=INSERT, meta=()}",
                         "DataChangeEvent{tableId=default_namespace.default_schema.merged, before=[], after=[6, Frank, 30, student, null, male], op=INSERT, meta=()}");
     }
