@@ -25,6 +25,9 @@ import com.ververica.cdc.common.configuration.description.Description;
 import com.ververica.cdc.common.configuration.description.ListElement;
 
 import java.time.Duration;
+import java.util.Collections;
+import java.util.List;
+import java.util.Map;
 
 import static com.ververica.cdc.common.configuration.description.TextElement.text;
 import static org.apache.flink.streaming.api.environment.ExecutionCheckpointingOptions.MAX_CONCURRENT_CHECKPOINTS;
@@ -89,31 +92,6 @@ public class PipelineOptions {
                     .defaultValue("$$_schema_operator_$$")
                     .withDescription(
                             "The unique ID for schema operator. This ID will be used for inter-operator communications and must be unique across operators.");
-
-    public static final ConfigOption<Boolean> ENCRYPTOR_ENABLED =
-            ConfigOptions.key("jasypt-encryptor.enabled")
-                    .booleanType()
-                    .defaultValue(false)
-                    .withDescription("Whether to enable encryptor.");
-
-    public static final ConfigOption<String> ENCRYPTOR_PRIVATE_KEY_FORMAT =
-            ConfigOptions.key("jasypt-encryptor.private-key-format")
-                    .stringType()
-                    .defaultValue("DER")
-                    .withDescription("The format of private key, DER or PEM.");
-
-    public static final ConfigOption<String> ENCRYPTOR_PRIVATE_KEY_STRING =
-            ConfigOptions.key("jasypt-encryptor.private-key-string")
-                    .stringType()
-                    .defaultValue("")
-                    .withDescription("The private key for decryption in String format.");
-
-    public static final ConfigOption<String> ENCRYPTOR_PRIVATE_KEY_LOCATION =
-            ConfigOptions.key("jasypt-encryptor.private-key-location")
-                    .stringType()
-                    .defaultValue("")
-                    .withDescription("The location of the private key for decryption.");
-
     public static final ConfigOption<Duration> CHECKPOINTING_TIMEOUT =
             ConfigOptions.key("execution.checkpointing.timeout")
                     .durationType()
@@ -144,6 +122,35 @@ public class PipelineOptions {
                     .defaultValue(DEFAULT_SCHEMA_OPERATOR_RPC_TIMEOUT)
                     .withDescription(
                             "The timeout time for SchemaOperator to wait downstream SchemaChangeEvent applying finished, the default value is 3 minutes.");
+
+    public static final ConfigOption<String> SHADE_IDENTIFIER_OPTION =
+            ConfigOptions.key("shade.identifier")
+                    .stringType()
+                    .defaultValue("default")
+                    .withDescription(
+                            "The identifier of the encryption method for decryption. Defaults to \"default\", indicating no encryption");
+
+    public static final ConfigOption<List<String>> SHADE_SENSITIVE_KEYWORDS =
+            ConfigOptions.key("shade.sensitive.keywords")
+                    .stringType()
+                    .asList()
+                    .defaultValues("password")
+                    .withDescription("The keyword of the configuration item to be decrypted.");
+
+    public static final ConfigOption<List<String>> ADDITIONAL_SHIP_FILES =
+            ConfigOptions.key("$internal.additional-ship-files")
+                    .stringType()
+                    .asList()
+                    .noDefaultValue()
+                    .withDescription(
+                            "**DO NOT USE** A semicolon-separated list of additional files defined in the pipeline definition to be shipped to the YARN cluster.");
+
+    public static final ConfigOption<Map<String, String>> ADDITIONAL_FLINK_CONF =
+            ConfigOptions.key("$internal.additional-flink-conf")
+                    .mapType()
+                    .defaultValue(Collections.emptyMap())
+                    .withDescription(
+                            "**DO NOT USE** A map of additional flink configurations defined in the pipeline definition.");
 
     private PipelineOptions() {}
 }

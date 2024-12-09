@@ -14,11 +14,21 @@
  * limitations under the License.
  */
 
-package com.ververica.cdc.cli.encryptor.jasypt;
+package com.ververica.cdc.cli.encryptor.shades;
 
-/** An interface to resolve property values that may be encrypted. */
-public interface EncryptablePropertyResolver {
+import com.ververica.cdc.common.shade.ConfigShade;
 
-    /** resolvePropertyValue. */
-    String resolvePropertyValue(String value);
+/** Test Default ConfigShade. */
+public class DefaultConfigShadeTest implements ConfigShade {
+    private static final String IDENTIFIER = "default";
+
+    @Override
+    public String getIdentifier() {
+        return IDENTIFIER;
+    }
+
+    @Override
+    public String decrypt(String content) {
+        return content;
+    }
 }

@@ -54,7 +54,6 @@ public class PipelineDef {
     private final List<RouteDef> routes;
     private final List<TransformDef> transforms;
     private final Configuration config;
-    private boolean isEncrypted = false;
 
     public PipelineDef(
             List<SourceDef> sources,
@@ -88,17 +87,6 @@ public class PipelineDef {
         return sources;
     }
 
-    public PipelineDef(
-            List<SourceDef> source,
-            SinkDef sink,
-            List<RouteDef> routes,
-            List<TransformDef> transforms,
-            Configuration config,
-            boolean isEncrypted) {
-        this(source, sink, routes, transforms, config);
-        this.isEncrypted = isEncrypted;
-    }
-
     public SinkDef getSink() {
         return sink;
     }
@@ -113,10 +101,6 @@ public class PipelineDef {
 
     public Configuration getConfig() {
         return config;
-    }
-
-    public boolean getIsEncrypted() {
-        return isEncrypted;
     }
 
     @Override

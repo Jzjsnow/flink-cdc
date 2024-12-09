@@ -44,6 +44,7 @@ import java.util.Objects;
 import java.util.stream.Collectors;
 
 import static com.ververica.cdc.cli.CliFrontend.addShipFile;
+import static com.ververica.cdc.cli.CliFrontend.addShipFiles;
 
 /** Executor for doing the composing and submitting logic for {@link CliFrontend}. */
 public class CliExecutor {
@@ -154,15 +155,12 @@ public class CliExecutor {
         ApplicationClusterDeployer deployer =
                 new ApplicationClusterDeployer(clusterClientServiceLoader);
 
-        // If the pipeline definition file is encrypted and requires private key for decryption,
-        // ship the private key file to the YARN cluster
-        if (pipelineDef.getIsEncrypted()
-                && pipelineDef
-                        .getConfig()
-                        .contains(PipelineOptions.ENCRYPTOR_PRIVATE_KEY_LOCATION)) {
-            String privateKeyFile =
-                    pipelineDef.getConfig().get(PipelineOptions.ENCRYPTOR_PRIVATE_KEY_LOCATION);
-            addShipFile(privateKeyFile, flinkConfig);
+        // Add the additional ship files defined in the pipeline definition file to the YARN
+        // cluster. e.g. the private key for decryption.
+        if (pipelineDef.getConfig().contains(PipelineOptions.ADDITIONAL_SHIP_FILES)) {
+            List<String> additionalFilesInPipelineDef =
+                    pipelineDef.getConfig().get(PipelineOptions.ADDITIONAL_SHIP_FILES);
+            addShipFiles(additionalFilesInPipelineDef, flinkConfig);
         }
 
         // add additional files to ship to be shipped to the YARN cluster from the pipeline
@@ -203,14 +201,14 @@ public class CliExecutor {
 
     private void addFlinkConfigurationFromPipelineDef(
             Configuration flinkConfig, PipelineDef pipelineDef) {
-        Map<String, String> pipelineFlinkConfigs = pipelineDef.getConfig().toMap();
-        if (pipelineFlinkConfigs.containsKey(PipelineOptions.PIPELINE_NAME.key())) {
+        Map<String, String> pipelineConfigs = pipelineDef.getConfig().toMap();
+        if (pipelineConfigs.containsKey(PipelineOptions.PIPELINE_NAME.key())) {
             flinkConfig.set(
                     YarnApplicationOptions.APPLICATION_NAME,
-                    pipelineFlinkConfigs.get(PipelineOptions.PIPELINE_NAME.key()));
+                    pipelineConfigs.get(PipelineOptions.PIPELINE_NAME.key()));
         }
         Map<String, String> flinkConfToAdd =
-                pipelineFlinkConfigs.entrySet().stream()
+                pipelineConfigs.entrySet().stream()
                         .filter(
                                 pipelineConfig ->
                                         pipelineConfig.getKey().startsWith(FLINK_CONF_PREFIX))
@@ -221,6 +219,11 @@ public class CliExecutor {
                                                         .getKey()
                                                         .substring(FLINK_CONF_PREFIX.length()),
                                         Map.Entry::getValue));
+
+        Map<String, String> additionalConfigs =
+                pipelineDef.getConfig().get(PipelineOptions.ADDITIONAL_FLINK_CONF);
+        flinkConfToAdd.putAll(additionalConfigs);
+
         Configuration newFlinkConf = Configuration.fromMap(flinkConfToAdd);
         flinkConfig.addAll(newFlinkConf);
     }

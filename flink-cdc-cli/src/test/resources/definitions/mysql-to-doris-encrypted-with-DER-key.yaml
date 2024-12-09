@@ -41,6 +41,7 @@ sink:
 pipeline:
   name: Sync MySQL Database to Doris
   parallelism: 2
-  jasypt-encryptor.enabled: true
+  shade.identifier: rsa
+  shade.sensitive.keywords: password
   jasypt-encryptor.private-key-format: DER
   jasypt-encryptor.private-key-location: src/test/resources/private_key.der
