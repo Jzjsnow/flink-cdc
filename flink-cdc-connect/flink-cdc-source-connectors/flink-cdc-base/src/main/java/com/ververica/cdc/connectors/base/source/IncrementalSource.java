@@ -114,7 +114,7 @@ public class IncrementalSource<T, C extends SourceConfig>
                 new FutureCompletingBlockingQueue<>();
 
         final SourceReaderMetrics sourceReaderMetrics =
-                new SourceReaderMetrics(readerContext.metricGroup());
+                new SourceReaderMetrics(readerContext.metricGroup(), "Public");
 
         sourceReaderMetrics.registerMetrics();
         Supplier<IncrementalSourceSplitReader<C>> splitReaderSupplier =

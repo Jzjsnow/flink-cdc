@@ -16,12 +16,16 @@
 
 package com.ververica.cdc.connectors.postgres.source;
 
+import org.apache.flink.api.connector.source.SourceReaderContext;
 import org.apache.flink.api.connector.source.SplitEnumerator;
 import org.apache.flink.api.connector.source.SplitEnumeratorContext;
 import org.apache.flink.connector.base.source.reader.RecordEmitter;
+import org.apache.flink.connector.base.source.reader.RecordsWithSplitIds;
+import org.apache.flink.connector.base.source.reader.synchronization.FutureCompletingBlockingQueue;
 import org.apache.flink.util.FlinkRuntimeException;
 
 import com.ververica.cdc.common.annotation.Experimental;
+import com.ververica.cdc.connectors.base.config.JdbcSourceConfig;
 import com.ververica.cdc.connectors.base.options.StartupMode;
 import com.ververica.cdc.connectors.base.options.StartupOptions;
 import com.ververica.cdc.connectors.base.source.assigner.HybridSplitAssigner;
@@ -32,6 +36,10 @@ import com.ververica.cdc.connectors.base.source.jdbc.JdbcIncrementalSource;
 import com.ververica.cdc.connectors.base.source.meta.split.SourceRecords;
 import com.ververica.cdc.connectors.base.source.meta.split.SourceSplitBase;
 import com.ververica.cdc.connectors.base.source.meta.split.SourceSplitState;
+import com.ververica.cdc.connectors.base.source.metrics.SourceReaderMetrics;
+import com.ververica.cdc.connectors.base.source.reader.IncrementalSourceReader;
+import com.ververica.cdc.connectors.base.source.reader.IncrementalSourceSplitReader;
+import com.ververica.cdc.connectors.base.source.utils.hooks.SnapshotPhaseHooks;
 import com.ververica.cdc.connectors.postgres.source.config.PostgresSourceConfig;
 import com.ververica.cdc.connectors.postgres.source.config.PostgresSourceConfigFactory;
 import com.ververica.cdc.connectors.postgres.source.enumerator.PostgresSourceEnumerator;
@@ -42,6 +50,7 @@ import io.debezium.relational.TableId;
 import java.time.Duration;
 import java.util.List;
 import java.util.Properties;
+import java.util.function.Supplier;
 
 import static org.apache.flink.util.Preconditions.checkNotNull;
 
@@ -288,6 +297,9 @@ public class PostgresSourceBuilder<T> {
     /** The Postgres source based on the incremental snapshot framework. */
     @Experimental
     public static class PostgresIncrementalSource<T> extends JdbcIncrementalSource<T> {
+
+        private SnapshotPhaseHooks snapshotHooks = SnapshotPhaseHooks.empty();
+
         public PostgresIncrementalSource(
                 PostgresSourceConfigFactory configFactory,
                 DebeziumDeserializationSchema<T> deserializationSchema,
@@ -295,6 +307,36 @@ public class PostgresSourceBuilder<T> {
                 PostgresDialect dataSourceDialect) {
             super(configFactory, deserializationSchema, offsetFactory, dataSourceDialect);
             super.setRecordEmitter(recordEmitter);
+        }
+
+        @Override
+        public IncrementalSourceReader<T, JdbcSourceConfig> createReader(
+                SourceReaderContext readerContext) throws Exception {
+            // create source config for the given subtask (e.g. unique server id)
+            JdbcSourceConfig sourceConfig = configFactory.create(readerContext.getIndexOfSubtask());
+            FutureCompletingBlockingQueue<RecordsWithSplitIds<SourceRecords>> elementsQueue =
+                    new FutureCompletingBlockingQueue<>();
+
+            final SourceReaderMetrics sourceReaderMetricsPostgres =
+                    new SourceReaderMetrics(readerContext.metricGroup(), "Postgres");
+
+            sourceReaderMetricsPostgres.registerMetrics();
+            Supplier<IncrementalSourceSplitReader<JdbcSourceConfig>> splitReaderSupplier =
+                    () ->
+                            new IncrementalSourceSplitReader<>(
+                                    readerContext.getIndexOfSubtask(),
+                                    dataSourceDialect,
+                                    sourceConfig,
+                                    snapshotHooks);
+            return new IncrementalSourceReader<>(
+                    elementsQueue,
+                    splitReaderSupplier,
+                    createRecordEmitter(sourceConfig, sourceReaderMetricsPostgres),
+                    readerContext.getConfiguration(),
+                    readerContext,
+                    sourceConfig,
+                    sourceSplitSerializer,
+                    dataSourceDialect);
         }
 
         @Override

@@ -27,6 +27,7 @@ import com.ververica.cdc.connectors.base.source.reader.IncrementalSourceReader;
 public class SourceReaderMetrics {
 
     private final SourceReaderMetricGroup metricGroup;
+    private String dataSourceType;
     private static final String METRIC_NAME_FORMAT = "%s_%s";
     private static final String FLINK_CDC_SOURCE_POSTGRES = "flinkCDC_Source_Postgres";
     private static final String FLINK_CDC_SOURCE_ORACLE = "flinkCDC_Source_Oracle";
@@ -66,56 +67,67 @@ public class SourceReaderMetrics {
      */
     private volatile double numBytesInRate = 0L;
 
-    public SourceReaderMetrics(SourceReaderMetricGroup metricGroup) {
+    public SourceReaderMetrics(SourceReaderMetricGroup metricGroup, String dataSourceType) {
         this.metricGroup = metricGroup;
         this.numRecordsInErrorsCounter = metricGroup.getNumRecordsInErrorsCounter();
+        this.dataSourceType = dataSourceType;
     }
 
     public void registerMetrics() {
-        metricGroup.gauge(
-                MetricNames.CURRENT_FETCH_EVENT_TIME_LAG, (Gauge<Long>) this::getFetchDelay);
-        metricGroup.gauge(
-                String.format(
-                        METRIC_NAME_FORMAT,
-                        FLINK_CDC_SOURCE_POSTGRES,
-                        MetricNames.IO_NUM_RECORDS_IN),
-                (Gauge<Double>) this::getNumRecordsIn);
-        metricGroup.gauge(
-                String.format(
-                        METRIC_NAME_FORMAT, FLINK_CDC_SOURCE_POSTGRES, MetricNames.IO_NUM_BYTES_IN),
-                (Gauge<Double>) this::getNumBytesIn);
-        metricGroup.gauge(
-                String.format(
-                        METRIC_NAME_FORMAT,
-                        FLINK_CDC_SOURCE_POSTGRES,
-                        MetricNames.IO_NUM_RECORDS_IN_RATE),
-                (Gauge<Double>) this::getNumRecordsInRate);
-        metricGroup.gauge(
-                String.format(
-                        METRIC_NAME_FORMAT,
-                        FLINK_CDC_SOURCE_POSTGRES,
-                        MetricNames.IO_NUM_BYTES_IN_RATE),
-                (Gauge<Double>) this::getNumBytesInRate);
-        metricGroup.gauge(
-                String.format(
-                        METRIC_NAME_FORMAT, FLINK_CDC_SOURCE_ORACLE, MetricNames.IO_NUM_RECORDS_IN),
-                (Gauge<Double>) this::getNumRecordsIn);
-        metricGroup.gauge(
-                String.format(
-                        METRIC_NAME_FORMAT, FLINK_CDC_SOURCE_ORACLE, MetricNames.IO_NUM_BYTES_IN),
-                (Gauge<Double>) this::getNumBytesIn);
-        metricGroup.gauge(
-                String.format(
-                        METRIC_NAME_FORMAT,
-                        FLINK_CDC_SOURCE_ORACLE,
-                        MetricNames.IO_NUM_RECORDS_IN_RATE),
-                (Gauge<Double>) this::getNumRecordsInRate);
-        metricGroup.gauge(
-                String.format(
-                        METRIC_NAME_FORMAT,
-                        FLINK_CDC_SOURCE_ORACLE,
-                        MetricNames.IO_NUM_BYTES_IN_RATE),
-                (Gauge<Double>) this::getNumBytesInRate);
+        if ("Public".equals(dataSourceType)) {
+            metricGroup.gauge(
+                    MetricNames.CURRENT_FETCH_EVENT_TIME_LAG, (Gauge<Long>) this::getFetchDelay);
+        } else if ("Oracle".equals(dataSourceType)) {
+            metricGroup.gauge(
+                    String.format(
+                            METRIC_NAME_FORMAT,
+                            FLINK_CDC_SOURCE_ORACLE,
+                            MetricNames.IO_NUM_RECORDS_IN),
+                    (Gauge<Double>) this::getNumRecordsIn);
+            metricGroup.gauge(
+                    String.format(
+                            METRIC_NAME_FORMAT,
+                            FLINK_CDC_SOURCE_ORACLE,
+                            MetricNames.IO_NUM_BYTES_IN),
+                    (Gauge<Double>) this::getNumBytesIn);
+            metricGroup.gauge(
+                    String.format(
+                            METRIC_NAME_FORMAT,
+                            FLINK_CDC_SOURCE_ORACLE,
+                            MetricNames.IO_NUM_RECORDS_IN_RATE),
+                    (Gauge<Double>) this::getNumRecordsInRate);
+            metricGroup.gauge(
+                    String.format(
+                            METRIC_NAME_FORMAT,
+                            FLINK_CDC_SOURCE_ORACLE,
+                            MetricNames.IO_NUM_BYTES_IN_RATE),
+                    (Gauge<Double>) this::getNumBytesInRate);
+        } else if ("Postgres".equals(dataSourceType)) {
+            metricGroup.gauge(
+                    String.format(
+                            METRIC_NAME_FORMAT,
+                            FLINK_CDC_SOURCE_POSTGRES,
+                            MetricNames.IO_NUM_RECORDS_IN),
+                    (Gauge<Double>) this::getNumRecordsIn);
+            metricGroup.gauge(
+                    String.format(
+                            METRIC_NAME_FORMAT,
+                            FLINK_CDC_SOURCE_POSTGRES,
+                            MetricNames.IO_NUM_BYTES_IN),
+                    (Gauge<Double>) this::getNumBytesIn);
+            metricGroup.gauge(
+                    String.format(
+                            METRIC_NAME_FORMAT,
+                            FLINK_CDC_SOURCE_POSTGRES,
+                            MetricNames.IO_NUM_RECORDS_IN_RATE),
+                    (Gauge<Double>) this::getNumRecordsInRate);
+            metricGroup.gauge(
+                    String.format(
+                            METRIC_NAME_FORMAT,
+                            FLINK_CDC_SOURCE_POSTGRES,
+                            MetricNames.IO_NUM_BYTES_IN_RATE),
+                    (Gauge<Double>) this::getNumBytesInRate);
+        }
     }
 
     public long getFetchDelay() {

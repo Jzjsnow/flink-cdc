@@ -16,13 +16,21 @@
 
 package com.ververica.cdc.connectors.oracle.source;
 
+import org.apache.flink.api.connector.source.SourceReaderContext;
 import org.apache.flink.connector.base.source.reader.RecordEmitter;
+import org.apache.flink.connector.base.source.reader.RecordsWithSplitIds;
+import org.apache.flink.connector.base.source.reader.synchronization.FutureCompletingBlockingQueue;
 
 import com.ververica.cdc.common.annotation.Internal;
+import com.ververica.cdc.connectors.base.config.JdbcSourceConfig;
 import com.ververica.cdc.connectors.base.options.StartupOptions;
 import com.ververica.cdc.connectors.base.source.jdbc.JdbcIncrementalSource;
 import com.ververica.cdc.connectors.base.source.meta.split.SourceRecords;
 import com.ververica.cdc.connectors.base.source.meta.split.SourceSplitState;
+import com.ververica.cdc.connectors.base.source.metrics.SourceReaderMetrics;
+import com.ververica.cdc.connectors.base.source.reader.IncrementalSourceReader;
+import com.ververica.cdc.connectors.base.source.reader.IncrementalSourceSplitReader;
+import com.ververica.cdc.connectors.base.source.utils.hooks.SnapshotPhaseHooks;
 import com.ververica.cdc.connectors.oracle.source.config.OracleSourceConfigFactory;
 import com.ververica.cdc.connectors.oracle.source.meta.offset.RedoLogOffsetFactory;
 import com.ververica.cdc.debezium.DebeziumDeserializationSchema;
@@ -31,6 +39,7 @@ import javax.annotation.Nullable;
 
 import java.time.Duration;
 import java.util.Properties;
+import java.util.function.Supplier;
 
 import static org.apache.flink.util.Preconditions.checkNotNull;
 
@@ -268,6 +277,8 @@ public class OracleSourceBuilder<T> {
     /** The {@link JdbcIncrementalSource} implementation for Oracle. */
     public static class OracleIncrementalSource<T> extends JdbcIncrementalSource<T> {
 
+        private SnapshotPhaseHooks snapshotHooks = SnapshotPhaseHooks.empty();
+
         public OracleIncrementalSource(
                 OracleSourceConfigFactory configFactory,
                 DebeziumDeserializationSchema<T> deserializationSchema,
@@ -275,6 +286,36 @@ public class OracleSourceBuilder<T> {
                 OracleDialect dataSourceDialect) {
             super(configFactory, deserializationSchema, offsetFactory, dataSourceDialect);
             super.setRecordEmitter(recordEmitter);
+        }
+
+        @Override
+        public IncrementalSourceReader<T, JdbcSourceConfig> createReader(
+                SourceReaderContext readerContext) throws Exception {
+            // create source config for the given subtask (e.g. unique server id)
+            JdbcSourceConfig sourceConfig = configFactory.create(readerContext.getIndexOfSubtask());
+            FutureCompletingBlockingQueue<RecordsWithSplitIds<SourceRecords>> elementsQueue =
+                    new FutureCompletingBlockingQueue<>();
+
+            final SourceReaderMetrics sourceReaderMetricsOracle =
+                    new SourceReaderMetrics(readerContext.metricGroup(), "Oracle");
+
+            sourceReaderMetricsOracle.registerMetrics();
+            Supplier<IncrementalSourceSplitReader<JdbcSourceConfig>> splitReaderSupplier =
+                    () ->
+                            new IncrementalSourceSplitReader<>(
+                                    readerContext.getIndexOfSubtask(),
+                                    dataSourceDialect,
+                                    sourceConfig,
+                                    snapshotHooks);
+            return new IncrementalSourceReader<>(
+                    elementsQueue,
+                    splitReaderSupplier,
+                    createRecordEmitter(sourceConfig, sourceReaderMetricsOracle),
+                    readerContext.getConfiguration(),
+                    readerContext,
+                    sourceConfig,
+                    sourceSplitSerializer,
+                    dataSourceDialect);
         }
 
         public static <T> OracleSourceBuilder<T> builder() {
