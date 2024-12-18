@@ -38,6 +38,7 @@ import static com.ververica.cdc.connectors.iceberg.sink.IcebergDataSinkOptions.H
 import static com.ververica.cdc.connectors.iceberg.sink.IcebergDataSinkOptions.OVERWRITE_MODE;
 import static com.ververica.cdc.connectors.iceberg.sink.IcebergDataSinkOptions.SINK_PARALLELISM;
 import static com.ververica.cdc.connectors.iceberg.sink.IcebergDataSinkOptions.TABLENAME;
+import static com.ververica.cdc.connectors.iceberg.sink.IcebergDataSinkOptions.TABLENAMES;
 import static com.ververica.cdc.connectors.iceberg.sink.IcebergDataSinkOptions.WAREHOUSE;
 
 /** A dummy {@link DataSinkFactory} to create {@link IcebergDataSink}. */
@@ -62,7 +63,6 @@ public class IcebergDataSinkFactory implements DataSinkFactory {
     public Set<ConfigOption<?>> requiredOptions() {
         Set<ConfigOption<?>> options = new HashSet<>();
         options.add(DATABASE);
-        options.add(TABLENAME);
         options.add(WAREHOUSE);
         options.add(HIVEURI);
         options.add(FSDEFAULTFS);
@@ -73,6 +73,8 @@ public class IcebergDataSinkFactory implements DataSinkFactory {
     public Set<ConfigOption<?>> optionalOptions() {
         Set<ConfigOption<?>> options = new HashSet<>();
         options.add(CATALOG_TYPE);
+        options.add(TABLENAME);
+        options.add(TABLENAMES);
         options.add(SINK_PARALLELISM);
         options.add(CATALOG_NAME);
         options.add(CLIENT_POOL_SIZE);

@@ -16,6 +16,8 @@
 
 package com.ververica.cdc.connectors.iceberg.utils;
 
+import org.apache.flink.shaded.guava30.com.google.common.base.Splitter;
+
 import com.ververica.cdc.common.configuration.Configuration;
 import com.ververica.cdc.connectors.iceberg.sink.IcebergDataSinkOptions;
 import org.apache.iceberg.CatalogProperties;
@@ -26,13 +28,16 @@ import org.slf4j.LoggerFactory;
 
 import java.io.ByteArrayInputStream;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
 
 import static com.ververica.cdc.connectors.iceberg.sink.IcebergDataSinkOptions.getPropertiesByPrefix;
 
 /** Supports {@link IcebergUtils} to hive catalog. */
 public class IcebergUtils {
     private static final Logger LOG = LoggerFactory.getLogger(IcebergUtils.class);
+    private static final Splitter TABLES_SPLITTER = Splitter.on(',').trimResults();
 
     public static org.apache.hadoop.conf.Configuration hadoopConfiguration(Configuration config) {
         org.apache.hadoop.conf.Configuration configuration =
@@ -88,5 +93,39 @@ public class IcebergUtils {
                 LOG.debug("this type catalog dont not need init catalogloader!");
                 return null;
         }
+    }
+
+    public static String getDatabase(Configuration configuration) {
+        return configuration
+                .getOptional(IcebergDataSinkOptions.DATABASE)
+                .orElseThrow(
+                        () ->
+                                new IllegalArgumentException(
+                                        "Database not specified. "
+                                                + IcebergDataSinkOptions.DATABASE
+                                                + " must be provided"));
+    }
+
+    public static List<String> getTables(Configuration configuration) {
+        String tableNames =
+                configuration
+                        .getOptional(IcebergDataSinkOptions.TABLENAMES)
+                        .orElseGet(
+                                () ->
+                                        configuration
+                                                .getOptional(IcebergDataSinkOptions.TABLENAME)
+                                                .orElseThrow(
+                                                        () ->
+                                                                new IllegalArgumentException(
+                                                                        "Table(s) not specified. Either "
+                                                                                + IcebergDataSinkOptions
+                                                                                        .TABLENAME
+                                                                                + " or "
+                                                                                + IcebergDataSinkOptions
+                                                                                        .TABLENAMES
+                                                                                + " must be provided")));
+        return TABLES_SPLITTER.splitToList(tableNames).stream()
+                .distinct()
+                .collect(Collectors.toList());
     }
 }

@@ -60,7 +60,14 @@ public class IcebergDataSinkOptions {
             ConfigOptions.key("tablename")
                     .stringType()
                     .noDefaultValue()
-                    .withDescription("The name of the table to be written.");
+                    .withDescription(
+                            "The name of the table to be written. It will be overridden by the \"tablenames\" option if set. Either option \"tablename\" or \"tablenames\" should be specified.");
+    public static final ConfigOption<String> TABLENAMES =
+            ConfigOptions.key("tablenames")
+                    .stringType()
+                    .noDefaultValue()
+                    .withDescription(
+                            "The names of the tables to be written. It will override the \"tablename\" option if set. Either option \"tablename\" or \"tablenames\" should be specified.");
     public static final ConfigOption<String> WAREHOUSE =
             ConfigOptions.key("catalog.hive.warehouse")
                     .stringType()

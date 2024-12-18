@@ -83,8 +83,8 @@ public class IcebergMetadataApplier implements MetadataApplier {
             Table table =
                     catalog.loadTable(
                             TableIdentifier.of(
-                                    config.getOptional(IcebergDataSinkOptions.DATABASE).get(),
-                                    config.getOptional(IcebergDataSinkOptions.TABLENAME).get()));
+                                    IcebergUtils.getDatabase(config),
+                                    event.tableId().getTableName()));
             UpdateSchema newSchema = table.updateSchema();
             // send schema change op to iceberg
             if (event instanceof CreateTableEvent) {
