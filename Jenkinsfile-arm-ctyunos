@@ -79,7 +79,7 @@ pipeline {
                     //gitCommitMsg = sh(script: "git log --pretty=format:%s ${gitCommitId} -1", returnStdout: true).trim()
                     echo 'begin checkout...'
                     echo sh(returnStdout: true, script: "env")
-                    def re_commit = /^(\[FLINK-CDC-\d+\])|(\(hotfix\)).+$/
+                    def re_commit = /^((\[FLINK-CDC-\d+\])|(\(hotfix\))|(fixup!)).+$/
                     //def re_commit = /^(\[(FLINK)-\d+\]){1,3}.+$/
                     match_result = (gitCommitMsg =~ re_commit).matches()
 
