@@ -62,6 +62,7 @@ import static com.ververica.cdc.connectors.mysql.source.MySqlDataSourceOptions.P
 import static com.ververica.cdc.connectors.mysql.source.MySqlDataSourceOptions.SCAN_INCREMENTAL_CLOSE_IDLE_READER_ENABLED;
 import static com.ververica.cdc.connectors.mysql.source.MySqlDataSourceOptions.SCAN_INCREMENTAL_SNAPSHOT_CHUNK_KEY_COLUMN;
 import static com.ververica.cdc.connectors.mysql.source.MySqlDataSourceOptions.SCAN_INCREMENTAL_SNAPSHOT_CHUNK_SIZE;
+import static com.ververica.cdc.connectors.mysql.source.MySqlDataSourceOptions.SCAN_NEWLY_ADDED_TABLE_ENABLED;
 import static com.ververica.cdc.connectors.mysql.source.MySqlDataSourceOptions.SCAN_SNAPSHOT_FETCH_SIZE;
 import static com.ververica.cdc.connectors.mysql.source.MySqlDataSourceOptions.SCAN_STARTUP_MODE;
 import static com.ververica.cdc.connectors.mysql.source.MySqlDataSourceOptions.SCAN_STARTUP_SPECIFIC_OFFSET_FILE;
@@ -118,6 +119,7 @@ public class MySqlDataSourceFactory implements DataSourceFactory {
         Duration connectTimeout = config.get(CONNECT_TIMEOUT);
         int connectMaxRetries = config.get(CONNECT_MAX_RETRIES);
         int connectionPoolSize = config.get(CONNECTION_POOL_SIZE);
+        boolean scanNewlyAddedTableEnabled = config.get(SCAN_NEWLY_ADDED_TABLE_ENABLED);
 
         validateIntegerOption(SCAN_INCREMENTAL_SNAPSHOT_CHUNK_SIZE, splitSize, 1);
         validateIntegerOption(CHUNK_META_GROUP_SIZE, splitMetaGroupSize, 1);
@@ -155,7 +157,8 @@ public class MySqlDataSourceFactory implements DataSourceFactory {
                         .includeSchemaChanges(includeSchemaChanges)
                         .debeziumProperties(getDebeziumProperties(configMap))
                         .jdbcProperties(getJdbcProperties(configMap))
-                        .udalShardkeyColumn(udalShardkeyColumn);
+                        .udalShardkeyColumn(udalShardkeyColumn)
+                        .scanNewlyAddedTableEnabled(scanNewlyAddedTableEnabled);
 
         Selectors selectors = new Selectors.SelectorsBuilder().includeTables(tables).build();
         String[] capturedTables = getTableList(configFactory.createConfig(0), selectors);
@@ -230,6 +233,7 @@ public class MySqlDataSourceFactory implements DataSourceFactory {
         options.add(CONNECT_MAX_RETRIES);
         options.add(SCAN_INCREMENTAL_CLOSE_IDLE_READER_ENABLED);
         options.add(SCAN_INCREMENTAL_SNAPSHOT_CHUNK_KEY_COLUMN);
+        options.add(SCAN_NEWLY_ADDED_TABLE_ENABLED);
         options.add(HEARTBEAT_INTERVAL);
         options.add(SCHEMA_CHANGE_ENABLED);
         return options;
