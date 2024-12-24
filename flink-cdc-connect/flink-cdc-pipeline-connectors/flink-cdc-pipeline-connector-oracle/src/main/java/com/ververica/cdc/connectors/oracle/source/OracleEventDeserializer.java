@@ -23,7 +23,7 @@ import com.ververica.cdc.common.annotation.Internal;
 import com.ververica.cdc.common.data.binary.BinaryStringData;
 import com.ververica.cdc.common.event.SchemaChangeEvent;
 import com.ververica.cdc.common.event.TableId;
-import com.ververica.cdc.connectors.oracle.source.parser.CustomOracleAntlrDdlParser;
+import com.ververica.cdc.connectors.oracle.source.parser.OracleAntlrDdlParser;
 import com.ververica.cdc.debezium.event.DebeziumEventDeserializationSchema;
 import com.ververica.cdc.debezium.table.DebeziumChangelogMode;
 import io.debezium.data.Envelope;
@@ -51,7 +51,7 @@ public class OracleEventDeserializer extends DebeziumEventDeserializationSchema 
     private static final long serialVersionUID = 1L;
 
     public static final String SCHEMA_CHANGE_EVENT_KEY_NAME =
-            "io.debezium.connector.mysql.SchemaChangeKey";
+            "io.debezium.connector.oracle.SchemaChangeKey";
 
     private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
 
@@ -59,7 +59,7 @@ public class OracleEventDeserializer extends DebeziumEventDeserializationSchema 
 
     private transient Tables tables;
 
-    private transient CustomOracleAntlrDdlParser customParser;
+    private transient OracleAntlrDdlParser customParser;
 
     public OracleEventDeserializer(
             DebeziumChangelogMode changelogMode,
@@ -72,16 +72,17 @@ public class OracleEventDeserializer extends DebeziumEventDeserializationSchema 
     @Override
     protected List<SchemaChangeEvent> deserializeSchemaChangeRecord(SourceRecord record) {
         if (includeSchemaChanges) {
-            if (customParser == null) {
-                customParser = new CustomOracleAntlrDdlParser();
-                tables = new Tables();
-            }
-
             try {
                 HistoryRecord historyRecord = getHistoryRecord(record);
 
                 String databaseName =
                         historyRecord.document().getString(HistoryRecord.Fields.DATABASE_NAME);
+                String schemaName =
+                        historyRecord.document().getString(HistoryRecord.Fields.SCHEMA_NAME);
+                if (customParser == null) {
+                    customParser = new OracleAntlrDdlParser(databaseName, schemaName);
+                    tables = new Tables();
+                }
                 String ddl =
                         historyRecord.document().getString(HistoryRecord.Fields.DDL_STATEMENTS);
                 customParser.setCurrentDatabase(databaseName);

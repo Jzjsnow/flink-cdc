@@ -19,19 +19,12 @@ package com.ververica.cdc.connectors.oracle.utils;
 import com.ververica.cdc.common.event.TableId;
 import com.ververica.cdc.common.schema.Column;
 import com.ververica.cdc.common.schema.Schema;
-import com.ververica.cdc.common.types.BigIntType;
 import com.ververica.cdc.common.types.DataType;
-import com.ververica.cdc.common.types.DataTypes;
-import com.ververica.cdc.common.types.DecimalType;
-import com.ververica.cdc.common.types.FloatType;
-import com.ververica.cdc.common.types.LocalZonedTimestampType;
-import com.ververica.cdc.common.types.TimestampType;
-import com.ververica.cdc.common.types.VarCharType;
-import com.ververica.cdc.common.types.ZonedTimestampType;
 import com.ververica.cdc.connectors.oracle.dto.ColumnInfo;
 import com.ververica.cdc.connectors.oracle.source.config.OracleSourceConfig;
 import com.ververica.cdc.connectors.oracle.source.utils.OracleSchema;
 import io.debezium.jdbc.JdbcConnection;
+import io.debezium.relational.ColumnEditor;
 import io.debezium.relational.Table;
 import io.debezium.relational.history.TableChanges;
 import org.slf4j.Logger;
@@ -158,72 +151,33 @@ public class OracleSchemaUtils {
 
     private OracleSchemaUtils() {}
 
+    private static io.debezium.relational.Column columnInfotoColumn(ColumnInfo columnInfo) {
+        Integer length =
+                columnInfo.getDataPrecision() == 0 || columnInfo.getDataPrecision() == null
+                        ? columnInfo.getDataLength()
+                        : columnInfo.getDataPrecision();
+        ColumnEditor editor =
+                io.debezium.relational.Column.editor()
+                        .name(columnInfo.getColumnName())
+                        .type(columnInfo.getDataType())
+                        .length(length)
+                        .scale(columnInfo.getDataScale());
+        return editor.create();
+    }
+
     public static Schema getSchema(JdbcConnection jdbc, io.debezium.relational.TableId tableId) {
         List<ColumnInfo> columns = showCreateTable(jdbc, tableId);
         List<String> pks = getTablePks(jdbc, tableId);
         List<com.ververica.cdc.common.schema.Column> list = new ArrayList<>();
         for (ColumnInfo columnInfo : columns) {
             DataType dataType = null;
-            dataType = getDataType(columnInfo);
+            dataType = OracleTypeUtils.fromDbzColumn(columnInfotoColumn(columnInfo));
             com.ververica.cdc.common.schema.Column column =
                     com.ververica.cdc.common.schema.Column.metadataColumn(
                             columnInfo.getColumnName().toLowerCase(Locale.ROOT), dataType);
             list.add(column);
         }
         return Schema.newBuilder().setColumns(list).primaryKey(pks).build();
-    }
-
-    public static DataType getDataType(ColumnInfo columnInfo) {
-        String type = columnInfo.getDataType();
-        DataType dataType;
-        switch (type) {
-            case "VARCHAR2":
-            case "CHAR":
-                dataType =
-                        columnInfo.getDataLength() == 0
-                                ? new VarCharType(255)
-                                : new VarCharType(columnInfo.getDataLength());
-                break;
-            case "BLOB":
-            case "CLOB":
-            case "TEXT":
-                dataType = DataTypes.STRING();
-                break;
-            case "NUMBER":
-                dataType =
-                        columnInfo.getDataPrecision() == null || columnInfo.getDataPrecision() == 0
-                                ? new DecimalType()
-                                : new DecimalType(
-                                        columnInfo.getDataPrecision(), columnInfo.getDataScale());
-                break;
-            case "LONG":
-                dataType = new BigIntType();
-                break;
-            case "DATE":
-                dataType = new TimestampType(6);
-                break;
-            case "FLOAT":
-                dataType = new FloatType();
-                break;
-            case "TIMESTAMP(1)":
-            case "TIMESTAMP(3)":
-            case "TIMESTAMP(6)":
-            case "TIMESTAMP(9)":
-                dataType = new TimestampType(6);
-                break;
-            case "TIMESTAMP(9) WITH TIME ZONE":
-            case "TIMESTAMP(6) WITH TIME ZONE":
-            case "TIMESTAMP(3) WITH TIME ZONE":
-            case "TIMESTAMP(13) WITH TIME ZONE":
-                dataType = new ZonedTimestampType();
-                break;
-            case "TIMESTAMP(6) WITH LOCAL TIME ZONE":
-                dataType = new LocalZonedTimestampType();
-                break;
-            default:
-                throw new RuntimeException("Unsupported data type:" + type);
-        }
-        return dataType;
     }
 
     public static List<ColumnInfo> showCreateTable(
