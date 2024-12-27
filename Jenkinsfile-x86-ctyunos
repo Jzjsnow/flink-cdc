@@ -110,10 +110,10 @@ pipeline {
                         sh """echo $WORKSPACE"""
                         if(BRANCH_NAME ==~ env.MASTER_BRANCH || BRANCH_NAME ==~ env.DEV_BRANCH){
                         //The uid and gid correspond to the flinkci user in the docker image
-                            sh """mkdir -p /data1/flinkcdc/maven && chown -R 9999:9999 /data1/flinkcdc/maven && chown -R 9999:9999 $WORKSPACE && docker run --privileged --rm --cpus="6" -m 12g --user flinkci -v $WORKSPACE:/home/flinkci/flinkcdc -v /data1/flinkcdc/maven:/home/flinkci/.m2/repository -v /var/run/docker.sock:/var/run/docker.sock harbor.ctyuncdn.cn/bdyun/basic-image/amd-ctyunos-flinkcdc:v1.0.0 /bin/bash -c \"cd /home/flinkci/flinkcdc && mvn clean install -Dscala-2.12\""""
+                            sh """mkdir -p /data1/flinkcdc/maven && chown -R 9999:9999 /data1/flinkcdc/maven && chown -R 9999:9999 $WORKSPACE && docker run --privileged --rm --net=host --cpus="6" -m 12g --user flinkci -v $WORKSPACE:/home/flinkci/flinkcdc -v /data1/flinkcdc/maven:/home/flinkci/.m2/repository -v /var/run/docker.sock:/var/run/docker.sock harbor.ctyuncdn.cn/bdyun/basic-image/amd-ctyunos-flinkcdc:v1.0.0 /bin/bash -c \"cd /home/flinkci/flinkcdc && mvn clean install -Dscala-2.12\""""
 
                         }else{
-                            sh """mkdir -p /data1/flinkcdc/maven && chown -R 9999:9999 /data1/flinkcdc/maven && chown -R 9999:9999 $WORKSPACE && docker run --privileged --rm --cpus="6" -m 12g --user flinkci -v $WORKSPACE:/home/flinkci/flinkcdc -v /data1/flinkcdc/maven:/home/flinkci/.m2/repository harbor.ctyuncdn.cn/bdyun/basic-image/amd-ctyunos-flinkcdc:v1.0.0 /bin/bash -c \"cd /home/flinkci/flinkcdc && mvn clean install -DskipTests -Dfast  -Dscala-2.12\""""
+                            sh """mkdir -p /data1/flinkcdc/maven && chown -R 9999:9999 /data1/flinkcdc/maven && chown -R 9999:9999 $WORKSPACE && docker run --privileged --rm --net=host --cpus="6" -m 12g --user flinkci -v $WORKSPACE:/home/flinkci/flinkcdc -v /data1/flinkcdc/maven:/home/flinkci/.m2/repository harbor.ctyuncdn.cn/bdyun/basic-image/amd-ctyunos-flinkcdc:v1.0.0 /bin/bash -c \"cd /home/flinkci/flinkcdc && mvn clean install -DskipTests -Dfast -Dscala-2.12\""""
                         }
                         BUILD_RESULT = devops.updateBuildTasks(BUILD_RESULT,"Build-Package OK...√")
                 }

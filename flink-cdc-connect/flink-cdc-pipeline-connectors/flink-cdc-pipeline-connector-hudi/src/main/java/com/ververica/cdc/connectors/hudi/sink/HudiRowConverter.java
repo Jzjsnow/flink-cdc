@@ -35,7 +35,6 @@ import com.ververica.cdc.common.types.ZonedTimestampType;
 import java.io.IOException;
 import java.io.Serializable;
 import java.time.ZoneId;
-import java.time.ZonedDateTime;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
@@ -104,16 +103,14 @@ public class HudiRowConverter implements Serializable {
                                         .getMillisecond());
             case TIMESTAMP_WITH_LOCAL_TIME_ZONE:
                 return (index, val) ->
-                        ZonedDateTime.ofInstant(
-                                        val.getLocalZonedTimestampData(
-                                                        index, DataTypeChecks.getPrecision(type))
-                                                .toInstant(),
-                                        pipelineZoneId)
-                                .toLocalDateTime()
-                                .toEpochSecond(java.time.ZoneOffset.UTC);
+                        TimestampData.fromInstant(
+                                val.getLocalZonedTimestampData(
+                                                index, DataTypeChecks.getPrecision(type))
+                                        .toInstant());
             case TIMESTAMP_WITH_TIME_ZONE:
                 final int zonedP = ((ZonedTimestampType) type).getPrecision();
-                return (index, val) -> val.getTimestamp(index, zonedP).toTimestamp();
+                return (index, val) ->
+                        TimestampData.fromTimestamp(val.getTimestamp(index, zonedP).toTimestamp());
             case ARRAY:
                 return (index, val) -> val.getArray(index);
             case MAP:
