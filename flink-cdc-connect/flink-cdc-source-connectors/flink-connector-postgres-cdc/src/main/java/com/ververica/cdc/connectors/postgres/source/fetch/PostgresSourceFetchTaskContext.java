@@ -138,7 +138,7 @@ public class PostgresSourceFetchTaskContext extends JdbcSourceFetchTaskContext {
                                             ((PostgresSourceConfig) sourceConfig)
                                                     .getSlotNameForBackfillTask())
                                     // drop slot for backfill stream split
-                                    .with(DROP_SLOT_ON_STOP.name(), true)
+                                    .with(DROP_SLOT_ON_STOP.name(), getDropSlotOnStop())
                                     // Disable heartbeat event in snapshot split fetcher
                                     .with(Heartbeat.HEARTBEAT_INTERVAL, 0)
                                     .build());
@@ -148,8 +148,7 @@ public class PostgresSourceFetchTaskContext extends JdbcSourceFetchTaskContext {
                             dbzConfig
                                     .getConfig()
                                     .edit()
-                                    // never drop slot for stream split, which is also global split
-                                    .with(DROP_SLOT_ON_STOP.name(), true)
+                                    .with(DROP_SLOT_ON_STOP.name(), getDropSlotOnStop())
                                     .build());
         }
 
@@ -337,5 +336,15 @@ public class PostgresSourceFetchTaskContext extends JdbcSourceFetchTaskContext {
         return PostgresConnectorConfig.LogicalDecoder.parse(
                         sourceConfig.getDbzProperties().getProperty(PLUGIN_NAME.name()))
                 .getPostgresPluginName();
+    }
+
+    public String getDropSlotOnStop() {
+        String dropSlotOnStopValue =
+                sourceConfig.getDbzProperties().getProperty(DROP_SLOT_ON_STOP.name());
+        // default: never drop slot for stream split, which is also global split
+        if (dropSlotOnStopValue == null) {
+            return "false";
+        }
+        return dropSlotOnStopValue;
     }
 }
