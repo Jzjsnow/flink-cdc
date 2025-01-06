@@ -28,7 +28,6 @@ import org.apache.flink.runtime.state.FunctionSnapshotContext;
 import org.apache.flink.streaming.api.checkpoint.CheckpointedFunction;
 import org.apache.flink.streaming.api.functions.source.RichParallelSourceFunction;
 import org.apache.flink.util.Collector;
-import org.apache.flink.util.Preconditions;
 
 import org.apache.flink.shaded.guava30.com.google.common.util.concurrent.ThreadFactoryBuilder;
 
@@ -251,14 +250,15 @@ public class TiKVRichParallelSourceFunction<T> extends RichParallelSourceFunctio
     }
 
     protected void flushRows(final long timestamp) throws Exception {
-        Preconditions.checkState(sourceContext != null, "sourceContext shouldn't be null");
-        synchronized (sourceContext) {
-            while (!commits.isEmpty() && commits.firstKey().timestamp <= timestamp) {
-                final Cdcpb.Event.Row commitRow = commits.pollFirstEntry().getValue();
-                final Cdcpb.Event.Row prewriteRow =
-                        prewrites.remove(RowKeyWithTs.ofStart(commitRow));
-                // if pull cdc event block when region split, cdc event will lose.
-                committedEvents.offer(prewriteRow);
+        if (sourceContext != null) {
+            synchronized (sourceContext) {
+                while (!commits.isEmpty() && commits.firstKey().timestamp <= timestamp) {
+                    final Cdcpb.Event.Row commitRow = commits.pollFirstEntry().getValue();
+                    final Cdcpb.Event.Row prewriteRow =
+                            prewrites.remove(RowKeyWithTs.ofStart(commitRow));
+                    // if pull cdc event block when region split, cdc event will lose.
+                    committedEvents.offer(prewriteRow);
+                }
             }
         }
     }

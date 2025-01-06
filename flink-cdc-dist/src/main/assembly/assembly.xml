@@ -74,6 +74,13 @@ under the License.
         </file>
 
         <file>
+            <source>${project.basedir}/../flink-cdc-connect/flink-cdc-pipeline-connectors/flink-cdc-pipeline-connector-tidb/target/flink-cdc-pipeline-connector-tidb-${revision}.jar</source>
+            <outputDirectory>lib</outputDirectory>
+            <destName>flink-cdc-pipeline-connector-tidb-${revision}.jar</destName>
+            <fileMode>0644</fileMode>
+        </file>
+
+        <file>
             <source>${project.basedir}/../flink-cdc-connect/flink-cdc-pipeline-connectors/flink-cdc-pipeline-connector-values/target/flink-cdc-pipeline-connector-values-${revision}.jar</source>
             <outputDirectory>lib</outputDirectory>
             <destName>flink-cdc-pipeline-connector-values-${revision}.jar</destName>

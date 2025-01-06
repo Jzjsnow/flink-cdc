@@ -91,6 +91,12 @@ under the License.
             <version>${project.version}</version>
             <scope>provided</scope>
         </dependency>
+        <dependency>
+            <groupId>com.ververica</groupId>
+            <artifactId>flink-cdc-pipeline-connector-tidb</artifactId>
+            <version>${project.version}</version>
+            <scope>provided</scope>
+        </dependency>
 
         <dependency>
             <groupId>com.ververica</groupId>
