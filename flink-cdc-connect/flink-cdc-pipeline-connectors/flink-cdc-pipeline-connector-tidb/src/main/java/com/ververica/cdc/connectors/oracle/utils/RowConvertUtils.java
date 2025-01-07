@@ -191,6 +191,10 @@ public class RowConvertUtils {
             // TIMESTAMP_LTZ type is encoded in string type
             Instant instant = Instant.parse(str);
             return LocalZonedTimestampData.fromInstant(instant);
+        } else if (dbzObj instanceof org.apache.flink.table.data.TimestampData) {
+            org.apache.flink.table.data.TimestampData timestampData =
+                    (org.apache.flink.table.data.TimestampData) dbzObj;
+            return LocalZonedTimestampData.fromInstant(timestampData.toInstant());
         }
         throw new IllegalArgumentException(
                 "Unable to convert to TIMESTAMP_LTZ from unexpected value '"
