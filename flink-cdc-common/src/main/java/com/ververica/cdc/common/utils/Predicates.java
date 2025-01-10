@@ -22,10 +22,8 @@ import com.ververica.cdc.common.text.TokenStream;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
-import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Optional;
-import java.util.Set;
 import java.util.function.Function;
 import java.util.function.Predicate;
 import java.util.regex.Pattern;
@@ -35,7 +33,7 @@ import java.util.regex.PatternSyntaxException;
 public class Predicates {
 
     public static <T> Predicate<T> includes(String regexPatterns, Function<T, String> conversion) {
-        Set<Pattern> patterns = setOfRegex(regexPatterns, Pattern.CASE_INSENSITIVE);
+        List<Pattern> patterns = setOfRegex(regexPatterns, Pattern.CASE_INSENSITIVE);
         return includedInPatterns(patterns, conversion);
     }
 
@@ -58,16 +56,16 @@ public class Predicates {
         return includes(regexPatterns, (str) -> str);
     }
 
-    public static Set<Pattern> setOfRegex(String input, int regexFlags) {
+    public static List<Pattern> setOfRegex(String input, int regexFlags) {
         return setOf(input, RegExSplitterByComma::split, (str) -> Pattern.compile(str, regexFlags));
     }
 
-    public static <T> Set<T> setOf(
+    public static <T> List<T> setOf(
             String input, Function<String, String[]> splitter, Function<String, T> factory) {
         if (input == null) {
-            return Collections.emptySet();
+            return Collections.emptyList();
         }
-        Set<T> matches = new LinkedHashSet<>();
+        List<T> matches = new ArrayList<>();
         for (String item : splitter.apply(input)) {
             T obj = factory.apply(item);
             if (obj != null) {

@@ -22,7 +22,6 @@ import com.ververica.cdc.common.utils.Predicates;
 import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
-import java.util.Set;
 import java.util.function.Predicate;
 import java.util.stream.Collectors;
 
@@ -115,11 +114,11 @@ public class Selectors {
             }
 
             List<Selector> selectors = new ArrayList<>();
-            Set<String> tableSplitSet =
+            List<String> tableSplitSet =
                     Predicates.setOf(
                             tableInclusions, Predicates.RegExSplitterByComma::split, (str) -> str);
             for (String tableSplit : tableSplitSet) {
-                Set<String> tableIdSet =
+                List<String> tableIdSet =
                         Predicates.setOf(
                                 tableSplit, Predicates.RegExSplitterByDot::split, (str) -> str);
                 Iterator<String> iterator = tableIdSet.iterator();
