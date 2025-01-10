@@ -40,12 +40,6 @@
             <groupId>com.ververica</groupId>
             <artifactId>flink-connector-postgres-cdc</artifactId>
             <version>${project.version}</version>
-            <exclusions>
-                <exclusion>
-                    <artifactId>protobuf-java</artifactId>
-                    <groupId>com.google.protobuf</groupId>
-                </exclusion>
-            </exclusions>
         </dependency>
 
 
@@ -181,6 +175,7 @@
                                     <include>com.fasterxml.*:*</include>
                                     <include>com.esri.geometry:esri-geometry-api</include>
                                     <include>com.zaxxer:HikariCP</include>
+                                    <include>com.google.protobuf:protobuf-java</include>
                                 </includes>
                             </artifactSet>
                             <filters>
