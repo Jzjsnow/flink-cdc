@@ -42,6 +42,7 @@ import com.ververica.cdc.connectors.postgres.source.config.PostgresSourceConfigF
 import com.ververica.cdc.connectors.postgres.source.offset.PostgresOffsetFactory;
 import com.ververica.cdc.connectors.postgres.table.PostgreSQLReadableMetadata;
 import com.ververica.cdc.debezium.table.DebeziumChangelogMode;
+import io.debezium.relational.TableId;
 
 import java.time.Duration;
 import java.util.Collections;
@@ -71,12 +72,11 @@ import static com.ververica.cdc.connectors.pgsql.source.PostgresDataSourceOption
 import static com.ververica.cdc.connectors.pgsql.source.PostgresDataSourceOptions.SCAN_INCREMENTAL_SNAPSHOT_ENABLED;
 import static com.ververica.cdc.connectors.pgsql.source.PostgresDataSourceOptions.SCAN_SNAPSHOT_FETCH_SIZE;
 import static com.ververica.cdc.connectors.pgsql.source.PostgresDataSourceOptions.SCAN_STARTUP_MODE;
-import static com.ververica.cdc.connectors.pgsql.source.PostgresDataSourceOptions.SCHEMA_NAME;
 import static com.ververica.cdc.connectors.pgsql.source.PostgresDataSourceOptions.SPLIT_KEY_EVEN_DISTRIBUTION_FACTOR_LOWER_BOUND;
 import static com.ververica.cdc.connectors.pgsql.source.PostgresDataSourceOptions.SPLIT_KEY_EVEN_DISTRIBUTION_FACTOR_UPPER_BOUND;
-import static com.ververica.cdc.connectors.pgsql.source.PostgresDataSourceOptions.TABLE_NAME;
 import static com.ververica.cdc.connectors.pgsql.source.PostgresDataSourceOptions.USERNAME;
 import static com.ververica.cdc.connectors.pgsql.source.PostgresDataSourceOptions.getPropertiesByPrefix;
+import static com.ververica.cdc.connectors.pgsql.utils.PostgresSchemaUtils.getCapturedTableIds;
 
 /** A {@link DataSource} for PgSQL pipeline cdc connector. */
 @Internal
@@ -106,8 +106,6 @@ public class PostgresDataSource implements DataSource, SupportsReadingMetadata {
         String username = config.get(USERNAME);
         String password = config.get(PASSWORD);
         String databaseName = config.get(DATABASE_NAME);
-        String schemaName = config.get(SCHEMA_NAME);
-        String tableName = config.get(TABLE_NAME);
         int port = config.get(PG_PORT);
         String pluginName = config.get(DECODING_PLUGIN_NAME);
         Random random = new Random();
@@ -152,14 +150,19 @@ public class PostgresDataSource implements DataSource, SupportsReadingMetadata {
         Map configMap = getPropertiesByPrefix(config, DEBEZIUM_PROPERTIES_PREFIX);
         configMap.keySet().stream()
                 .forEach(e -> properties.setProperty(e.toString(), configMap.get(e).toString()));
+        List<TableId> capturedTableIds = getCapturedTableIds(sourceConfig);
+        List<String> tableList =
+                capturedTableIds.stream()
+                        .map(e -> e.schema() + "." + e.table())
+                        .collect(Collectors.toList());
+
         if (enableParallelRead) {
             JdbcIncrementalSource<Event> parallelSource =
                     PostgreSQLTableSourceReader.<Event>builder()
                             .hostname(hostname)
                             .port(port)
                             .database(databaseName)
-                            .schemaList(schemaName)
-                            .tableList(tableName)
+                            .tableList(tableList.toArray(new String[0]))
                             .username(username)
                             .password(password)
                             .decodingPluginName(pluginName)
@@ -190,9 +193,8 @@ public class PostgresDataSource implements DataSource, SupportsReadingMetadata {
                     PostgreSQLSourceReader.<Event>builder()
                             .hostname(hostname)
                             .port(port)
-                            .database(databaseName) // monitor postgresdatabase
-                            .schemaList(schemaName) // monitor inventory schema
-                            .tableList(tableName) // monitor productstable
+                            .database(databaseName) // monitor postgres database
+                            .tableList(tableList.toArray(new String[0])) // monitor productstable
                             .username(username)
                             .password(password)
                             .decodingPluginName(pluginName) // pg解码插件
