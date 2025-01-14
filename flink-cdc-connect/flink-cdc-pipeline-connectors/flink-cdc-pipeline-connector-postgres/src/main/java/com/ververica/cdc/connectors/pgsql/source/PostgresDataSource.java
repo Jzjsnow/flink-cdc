@@ -49,13 +49,11 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
-import java.util.Random;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import static com.ververica.cdc.common.utils.Preconditions.checkState;
 import static com.ververica.cdc.connectors.base.utils.ObjectUtils.doubleCompare;
-import static com.ververica.cdc.connectors.pgsql.source.PostgresDataSourceOptions.CHANGELOG_MODE;
 import static com.ververica.cdc.connectors.pgsql.source.PostgresDataSourceOptions.CHUNK_META_GROUP_SIZE;
 import static com.ververica.cdc.connectors.pgsql.source.PostgresDataSourceOptions.CONNECTION_POOL_SIZE;
 import static com.ververica.cdc.connectors.pgsql.source.PostgresDataSourceOptions.CONNECT_MAX_RETRIES;
@@ -72,6 +70,7 @@ import static com.ververica.cdc.connectors.pgsql.source.PostgresDataSourceOption
 import static com.ververica.cdc.connectors.pgsql.source.PostgresDataSourceOptions.SCAN_INCREMENTAL_SNAPSHOT_ENABLED;
 import static com.ververica.cdc.connectors.pgsql.source.PostgresDataSourceOptions.SCAN_SNAPSHOT_FETCH_SIZE;
 import static com.ververica.cdc.connectors.pgsql.source.PostgresDataSourceOptions.SCAN_STARTUP_MODE;
+import static com.ververica.cdc.connectors.pgsql.source.PostgresDataSourceOptions.SLOT_NAME;
 import static com.ververica.cdc.connectors.pgsql.source.PostgresDataSourceOptions.SPLIT_KEY_EVEN_DISTRIBUTION_FACTOR_LOWER_BOUND;
 import static com.ververica.cdc.connectors.pgsql.source.PostgresDataSourceOptions.SPLIT_KEY_EVEN_DISTRIBUTION_FACTOR_UPPER_BOUND;
 import static com.ververica.cdc.connectors.pgsql.source.PostgresDataSourceOptions.USERNAME;
@@ -108,9 +107,7 @@ public class PostgresDataSource implements DataSource, SupportsReadingMetadata {
         String databaseName = config.get(DATABASE_NAME);
         int port = config.get(PG_PORT);
         String pluginName = config.get(DECODING_PLUGIN_NAME);
-        Random random = new Random();
-        String slotName = "t_table_slot_" + Math.abs(random.nextInt());
-        DebeziumChangelogMode changelogMode = config.get(CHANGELOG_MODE);
+        String slotName = config.get(SLOT_NAME);
         boolean enableParallelRead = config.get(SCAN_INCREMENTAL_SNAPSHOT_ENABLED);
         StartupOptions startupOptions = getStartupOptions(config);
         int splitSize = config.get(SCAN_INCREMENTAL_SNAPSHOT_CHUNK_SIZE);

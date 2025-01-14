@@ -26,7 +26,6 @@ import com.ververica.cdc.connectors.postgres.table.PostgreSQLTableSource;
 
 import java.time.Duration;
 import java.util.HashSet;
-import java.util.Random;
 import java.util.Set;
 
 import static com.ververica.cdc.connectors.pgsql.source.PostgresDataSourceOptions.CHANGELOG_MODE;
@@ -73,8 +72,7 @@ public class PostgreSQLTableDataSourceFactory implements DataSourceFactory {
         configFactory.username(config.get(USERNAME));
         configFactory.password(config.get(PASSWORD));
         configFactory.includeSchemaChanges(config.get(SCHEMA_CHANGE_ENABLED));
-        Random random = new Random();
-        configFactory.slotName("t_table_slot_" + Math.abs(random.nextInt()));
+        configFactory.slotName(config.get(SLOT_NAME));
         configFactory.schemaList(new String[] {config.get(DATABASE_NAME)});
         configFactory.decodingPluginName(config.get(DECODING_PLUGIN_NAME));
         Duration duration = Duration.ofSeconds(10);
