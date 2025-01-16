@@ -31,6 +31,7 @@ public class SourceReaderMetrics {
     private static final String METRIC_NAME_FORMAT = "%s_%s";
     private static final String FLINK_CDC_SOURCE_POSTGRES = "flinkCDC_Source_Postgres";
     private static final String FLINK_CDC_SOURCE_ORACLE = "flinkCDC_Source_Oracle";
+    private static final String IS_SNAPSHOT_SPLIT_STATE = "isSnapshotSplitState";
 
     /**
      * currentFetchEventTimeLag = FetchTime - messageTimestamp, where the FetchTime is the time the
@@ -67,6 +68,14 @@ public class SourceReaderMetrics {
      */
     private volatile double numBytesInRate = 0L;
 
+    /**
+     * isSnapshotSplitState, typically represents the stage of data synchronization about data
+     * source. If this metric is 0L, the data synchronization is in the synchronization stage of
+     * snapshot. If this metric is 1L, the data synchronization parameter is in the incremental log
+     * synchronization phase.
+     */
+    private volatile long isSnapshotSplitState = 0L;
+
     public SourceReaderMetrics(SourceReaderMetricGroup metricGroup, String dataSourceType) {
         this.metricGroup = metricGroup;
         this.numRecordsInErrorsCounter = metricGroup.getNumRecordsInErrorsCounter();
@@ -102,6 +111,10 @@ public class SourceReaderMetrics {
                             FLINK_CDC_SOURCE_ORACLE,
                             MetricNames.IO_NUM_BYTES_IN_RATE),
                     (Gauge<Double>) this::getNumBytesInRate);
+            metricGroup.gauge(
+                    String.format(
+                            METRIC_NAME_FORMAT, FLINK_CDC_SOURCE_ORACLE, IS_SNAPSHOT_SPLIT_STATE),
+                    (Gauge<Long>) this::getIsSnapshotSplitState);
         } else if ("Postgres".equals(dataSourceType)) {
             metricGroup.gauge(
                     String.format(
@@ -127,6 +140,10 @@ public class SourceReaderMetrics {
                             FLINK_CDC_SOURCE_POSTGRES,
                             MetricNames.IO_NUM_BYTES_IN_RATE),
                     (Gauge<Double>) this::getNumBytesInRate);
+            metricGroup.gauge(
+                    String.format(
+                            METRIC_NAME_FORMAT, FLINK_CDC_SOURCE_POSTGRES, IS_SNAPSHOT_SPLIT_STATE),
+                    (Gauge<Long>) this::getIsSnapshotSplitState);
         }
     }
 
@@ -150,6 +167,10 @@ public class SourceReaderMetrics {
         return numBytesInRate;
     }
 
+    public long getIsSnapshotSplitState() {
+        return isSnapshotSplitState;
+    }
+
     public void recordFetchDelay(long fetchDelay) {
         this.fetchDelay = fetchDelay;
     }
@@ -168,6 +189,10 @@ public class SourceReaderMetrics {
 
     public void recordNumBytesInRate(double numBytesInRate) {
         this.numBytesInRate = numBytesInRate;
+    }
+
+    public void recordIsSnapshotSplitState(long isSnapshotSplitState) {
+        this.isSnapshotSplitState = isSnapshotSplitState;
     }
 
     public void addNumRecordsInErrors(long delta) {

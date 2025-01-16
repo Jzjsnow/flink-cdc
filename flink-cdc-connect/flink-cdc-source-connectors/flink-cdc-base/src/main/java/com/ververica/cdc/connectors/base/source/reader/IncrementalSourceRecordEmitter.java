@@ -112,6 +112,7 @@ public class IncrementalSourceRecordEmitter<T>
             if (isHighWatermarkEvent(element) && splitState.isSnapshotSplitState()) {
                 LOG.trace("Set HighWatermark {} for {}", watermark, splitState);
                 splitState.asSnapshotSplitState().setHighWatermark(watermark);
+                reportMetrics(0L);
             }
         } else if (isSchemaChangeEvent(element) && splitState.isStreamSplitState()) {
             LOG.trace("Process SchemaChangeEvent: {}; splitState = {}", element, splitState);
@@ -125,6 +126,7 @@ public class IncrementalSourceRecordEmitter<T>
             if (includeSchemaChanges) {
                 emitElement(element, output);
             }
+            reportMetrics(1L);
         } else if (isDataChangeRecord(element)) {
             LOG.trace("Process DataChangeRecord: {}; splitState = {}", element, splitState);
             updateStreamSplitState(splitState, element);
@@ -200,6 +202,11 @@ public class IncrementalSourceRecordEmitter<T>
             // report postgres num of bytes in rate
             sourceReaderMetrics.recordNumBytesInRate(rateOfBytes);
         }
+    }
+
+    private void reportMetrics(Long state) {
+        // report the stage of data synchronization : snapshot stage or increment stage
+        sourceReaderMetrics.recordIsSnapshotSplitState(state);
     }
 
     private static class OutputCollector<T> implements Collector<T>, Serializable {

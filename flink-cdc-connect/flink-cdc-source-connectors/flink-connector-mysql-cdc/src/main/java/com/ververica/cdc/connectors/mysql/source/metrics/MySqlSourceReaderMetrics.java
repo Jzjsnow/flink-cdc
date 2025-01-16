@@ -28,6 +28,7 @@ public class MySqlSourceReaderMetrics {
     private final MetricGroup metricGroup;
     private static final String METRIC_NAME_FORMAT = "%s_%s";
     private static final String FLINK_CDC_SOURCE_MYSQL = "flinkCDC_Source_Mysql";
+    private static final String IS_SNAPSHOT_SPLIT_STATE = "isSnapshotSplitState";
 
     /**
      * currentFetchEventTimeLag = FetchTime - messageTimestamp, where the FetchTime is the time the
@@ -61,6 +62,14 @@ public class MySqlSourceReaderMetrics {
      */
     private volatile double numBytesInRate = 0L;
 
+    /**
+     * isSnapshotSplitState, typically represents the stage of data synchronization about data
+     * source. If this metric is 0L, the data synchronization is in the synchronization stage of
+     * snapshot. If this metric is 1L, the data synchronization parameter is in the incremental log
+     * synchronization phase.
+     */
+    private volatile long isSnapshotSplitState = 0L;
+
     public MySqlSourceReaderMetrics(MetricGroup metricGroup) {
         this.metricGroup = metricGroup;
     }
@@ -92,6 +101,9 @@ public class MySqlSourceReaderMetrics {
                         FLINK_CDC_SOURCE_MYSQL,
                         MetricNames.IO_NUM_BYTES_IN_RATE),
                 (Gauge<Double>) this::getNumBytesInRate);
+        metricGroup.gauge(
+                String.format(METRIC_NAME_FORMAT, FLINK_CDC_SOURCE_MYSQL, IS_SNAPSHOT_SPLIT_STATE),
+                (Gauge<Long>) this::getIsSnapshotSplitState);
     }
 
     public long getFetchDelay() {
@@ -114,6 +126,10 @@ public class MySqlSourceReaderMetrics {
         return numBytesInRate;
     }
 
+    public long getIsSnapshotSplitState() {
+        return isSnapshotSplitState;
+    }
+
     public void recordFetchDelay(long fetchDelay) {
         this.fetchDelay = fetchDelay;
     }
@@ -132,5 +148,9 @@ public class MySqlSourceReaderMetrics {
 
     public void recordNumBytesInRate(double numBytesInRate) {
         this.numBytesInRate = numBytesInRate;
+    }
+
+    public void recordIsSnapshotSplitState(long isSnapshotSplitState) {
+        this.isSnapshotSplitState = isSnapshotSplitState;
     }
 }

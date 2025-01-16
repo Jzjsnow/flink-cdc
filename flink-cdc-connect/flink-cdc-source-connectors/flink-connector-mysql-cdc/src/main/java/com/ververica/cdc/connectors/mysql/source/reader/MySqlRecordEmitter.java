@@ -99,9 +99,11 @@ public class MySqlRecordEmitter<T> implements RecordEmitter<SourceRecords, T, My
             BinlogOffset watermark = getWatermark(element);
             if (isHighWatermarkEvent(element) && splitState.isSnapshotSplitState()) {
                 splitState.asSnapshotSplitState().setHighWatermark(watermark);
+                reportMetrics(0L);
             }
         } else if (isSchemaChangeEvent(element) && splitState.isBinlogSplitState()) {
             HistoryRecord historyRecord = getHistoryRecord(element);
+            reportMetrics(1L);
             Array tableChanges =
                     historyRecord.document().getArray(HistoryRecord.Fields.TABLE_CHANGES);
             TableChanges changes = TABLE_CHANGE_SERIALIZER.deserialize(tableChanges, true);
@@ -169,6 +171,11 @@ public class MySqlRecordEmitter<T> implements RecordEmitter<SourceRecords, T, My
             // report mysql num of bytes in rate
             sourceReaderMetrics.recordNumBytesInRate(rateOfBytes);
         }
+    }
+
+    private void reportMetrics(Long state) {
+        // report mysql stage of data synchronization : snapshot stage or increment stage
+        sourceReaderMetrics.recordIsSnapshotSplitState(state);
     }
 
     private static class OutputCollector<T> implements Collector<T> {
