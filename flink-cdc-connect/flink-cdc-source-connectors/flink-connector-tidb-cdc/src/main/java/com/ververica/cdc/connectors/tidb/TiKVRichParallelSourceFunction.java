@@ -28,6 +28,7 @@ import org.apache.flink.runtime.state.FunctionSnapshotContext;
 import org.apache.flink.streaming.api.checkpoint.CheckpointedFunction;
 import org.apache.flink.streaming.api.functions.source.RichParallelSourceFunction;
 import org.apache.flink.util.Collector;
+import org.apache.flink.util.FlinkRuntimeException;
 
 import org.apache.flink.shaded.guava30.com.google.common.util.concurrent.ThreadFactoryBuilder;
 
@@ -94,6 +95,9 @@ public class TiKVRichParallelSourceFunction<T> extends RichParallelSourceFunctio
     private transient ListState<Long> offsetState;
 
     private static final long CLOSE_TIMEOUT = 30L;
+
+    private volatile boolean exceptionFlag = false;
+    private volatile FlinkRuntimeException runtimeException;
 
     public TiKVRichParallelSourceFunction(
             TiKVSnapshotEventDeserializationSchema<T> snapshotEventDeserializationSchema,
@@ -230,11 +234,15 @@ public class TiKVRichParallelSourceFunction<T> extends RichParallelSourceFunctio
                             changeEventDeserializationSchema.deserialize(
                                     committedRow, outputCollector);
                         } catch (Exception e) {
-                            e.printStackTrace();
+                            exceptionFlag = true;
+                            runtimeException = new FlinkRuntimeException(e);
                         }
                     }
                 });
         while (resolvedTs >= STREAMING_VERSION_START_EPOCH) {
+            if (exceptionFlag) {
+                throw runtimeException;
+            }
             for (int i = 0; i < 1000; i++) {
                 final Cdcpb.Event.Row row = cdcClient.get();
                 if (row == null) {

@@ -25,6 +25,7 @@ import com.ververica.cdc.common.data.TimestampData;
 import com.ververica.cdc.common.data.binary.BinaryStringData;
 import com.ververica.cdc.common.types.DataType;
 import com.ververica.cdc.common.types.DecimalType;
+import com.ververica.cdc.common.utils.Preconditions;
 import com.ververica.cdc.debezium.table.DeserializationRuntimeConverter;
 import com.ververica.cdc.debezium.utils.TemporalConversions;
 import com.ververica.cdc.debezium.utils.TimeStampDataUtils;
@@ -254,6 +255,8 @@ public class RowConvertUtils {
                     createNotNullConverter(dataType).convert(rowData.getField(i), null);
             fieldsArr[i] = convertedField;
         }
+        Preconditions.checkState(
+                fields.length == fieldsArr.length, "Column size does not match the data size");
         return generator.generate(fieldsArr);
     }
 }
