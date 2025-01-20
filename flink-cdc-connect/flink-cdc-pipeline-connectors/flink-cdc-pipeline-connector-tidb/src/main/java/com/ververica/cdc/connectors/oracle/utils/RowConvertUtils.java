@@ -169,6 +169,11 @@ public class RowConvertUtils {
         if (dbzObj instanceof Long) {
             TimestampData sourceTime = TimestampData.fromMillis((Long) dbzObj);
             return convertToStandardTimeStamp(sourceTime, sourceTimeZone);
+        } else if (dbzObj instanceof org.apache.flink.table.data.TimestampData) {
+            org.apache.flink.table.data.TimestampData timestampData =
+                    (org.apache.flink.table.data.TimestampData) dbzObj;
+            return convertToStandardTimeStamp(
+                    TimestampData.fromMillis(timestampData.getMillisecond()), sourceTimeZone);
         }
         throw new IllegalArgumentException(
                 "Unable to convert to TIMESTAMP from unexpected value '"
@@ -205,7 +210,11 @@ public class RowConvertUtils {
     }
 
     protected static Object convertToString(Object dbzObj, Schema schema) {
-        return BinaryStringData.fromString(dbzObj.toString());
+        if (dbzObj == null) {
+            return null;
+        } else {
+            return BinaryStringData.fromString(dbzObj.toString());
+        }
     }
 
     protected static Object convertToBinary(Object dbzObj, Schema schema) {
