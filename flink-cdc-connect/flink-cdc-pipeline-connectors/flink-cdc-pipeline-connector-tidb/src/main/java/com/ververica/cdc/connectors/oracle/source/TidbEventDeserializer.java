@@ -57,6 +57,7 @@ public class TidbEventDeserializer extends RowDataTiKVEventDeserializationSchema
     private String database;
     private String tableName;
     private JdbcInfo jdbcInfo;
+    private com.ververica.cdc.common.schema.Schema schema;
 
     public TidbEventDeserializer(
             TiConfiguration tiConf,
@@ -85,8 +86,9 @@ public class TidbEventDeserializer extends RowDataTiKVEventDeserializationSchema
         TableId tableId = TableId.tableId(database, tableName);
         io.debezium.relational.TableId relationalTableId =
                 io.debezium.relational.TableId.parse(database + "." + tableName);
-        com.ververica.cdc.common.schema.Schema schema =
-                SchemaUtils.getSchema(relationalTableId, jdbcInfo);
+        if (schema == null) {
+            schema = SchemaUtils.getSchema(relationalTableId, jdbcInfo);
+        }
         switch (row.getOpType()) {
             case DELETE:
                 tikvValues = decodeObjects(row.getOldValue().toByteArray(), handle, tableInfo);

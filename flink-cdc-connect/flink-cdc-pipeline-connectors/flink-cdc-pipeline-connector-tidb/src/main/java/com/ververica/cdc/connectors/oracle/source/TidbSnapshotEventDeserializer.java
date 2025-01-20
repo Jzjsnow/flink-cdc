@@ -61,6 +61,7 @@ public class TidbSnapshotEventDeserializer extends RowDataTiKVEventDeserializati
     private final String sourceTimeZone;
 
     private JdbcInfo jdbcInfo;
+    private com.ververica.cdc.common.schema.Schema schema;
 
     public TidbSnapshotEventDeserializer(
             TiConfiguration tiConf,
@@ -88,8 +89,9 @@ public class TidbSnapshotEventDeserializer extends RowDataTiKVEventDeserializati
         TableId tableId = TableId.tableId(database, tableName);
         io.debezium.relational.TableId relationalTableId =
                 io.debezium.relational.TableId.parse(database + "." + tableName);
-        com.ververica.cdc.common.schema.Schema schema =
-                SchemaUtils.getSchema(relationalTableId, jdbcInfo);
+        if (schema == null) {
+            schema = SchemaUtils.getSchema(relationalTableId, jdbcInfo);
+        }
 
         Object[] tikvValues =
                 decodeObjects(
