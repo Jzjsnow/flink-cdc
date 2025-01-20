@@ -60,7 +60,7 @@ under the License.
     </distributionManagement>
 
     <properties>
-        <revision>cty-3.0-1.4-SNAPSHOT</revision>
+        <revision>cty-3.0-1.8-SNAPSHOT</revision>
         <java.version>1.8</java.version>
         <scala.binary.version>2.12</scala.binary.version>
         <maven.compiler.source>${java.version}</maven.compiler.source>
