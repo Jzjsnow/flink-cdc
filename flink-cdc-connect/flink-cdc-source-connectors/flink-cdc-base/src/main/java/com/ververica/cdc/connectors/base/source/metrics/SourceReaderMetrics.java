@@ -91,6 +91,12 @@ public class SourceReaderMetrics {
                     String.format(
                             METRIC_NAME_FORMAT,
                             FLINK_CDC_SOURCE_ORACLE,
+                            MetricNames.CURRENT_FETCH_EVENT_TIME_LAG),
+                    (Gauge<Long>) this::getFetchDelay);
+            metricGroup.gauge(
+                    String.format(
+                            METRIC_NAME_FORMAT,
+                            FLINK_CDC_SOURCE_ORACLE,
                             MetricNames.IO_NUM_RECORDS_IN),
                     (Gauge<Double>) this::getNumRecordsIn);
             metricGroup.gauge(
@@ -116,6 +122,12 @@ public class SourceReaderMetrics {
                             METRIC_NAME_FORMAT, FLINK_CDC_SOURCE_ORACLE, IS_SNAPSHOT_SPLIT_STATE),
                     (Gauge<Long>) this::getIsSnapshotSplitState);
         } else if ("Postgres".equals(dataSourceType)) {
+            metricGroup.gauge(
+                    String.format(
+                            METRIC_NAME_FORMAT,
+                            FLINK_CDC_SOURCE_POSTGRES,
+                            MetricNames.CURRENT_FETCH_EVENT_TIME_LAG),
+                    (Gauge<Long>) this::getFetchDelay);
             metricGroup.gauge(
                     String.format(
                             METRIC_NAME_FORMAT,

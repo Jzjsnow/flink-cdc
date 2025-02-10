@@ -92,7 +92,7 @@ under the License.
         <markBundledAsOptional>true</markBundledAsOptional>
         <flatten-maven-plugin.version>1.5.0</flatten-maven-plugin.version>
         <hadoop.version>3.3.2</hadoop.version>
-        <iceberg.version>1.4.3-cty-2.0.0</iceberg.version>
+        <iceberg.version>1.4.3-cty-2.0.2</iceberg.version>
         <hudi.version>0.14.0-cty-1.0.0</hudi.version>
     </properties>
 

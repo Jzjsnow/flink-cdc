@@ -42,7 +42,7 @@ under the License.
         <dependency>
             <groupId>org.apache.doris</groupId>
             <artifactId>flink-doris-connector-${flink.major.version}</artifactId>
-            <version>mpp-1.6.1-1.0.0</version>
+            <version>mpp-1.6.1-1.0.1</version>
         </dependency>
     </dependencies>
 
