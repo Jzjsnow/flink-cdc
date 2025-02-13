@@ -69,6 +69,7 @@ public class MySqlSourceConfig implements Serializable {
     private final Configuration dbzConfiguration;
     private final MySqlConnectorConfig dbzMySqlConfig;
     private final String udalShardkeyColumn;
+    private final boolean isAddMeta;
 
     MySqlSourceConfig(
             String hostname,
@@ -95,7 +96,8 @@ public class MySqlSourceConfig implements Serializable {
             Properties jdbcProperties,
             Map<ObjectPath, String> chunkKeyColumns,
             boolean skipSnapshotBackfill,
-            String udalShardkeyColumn) {
+            String udalShardkeyColumn,
+            boolean isAddMeta) {
         this.hostname = checkNotNull(hostname);
         this.port = port;
         this.username = checkNotNull(username);
@@ -123,6 +125,7 @@ public class MySqlSourceConfig implements Serializable {
         this.chunkKeyColumns = chunkKeyColumns;
         this.skipSnapshotBackfill = skipSnapshotBackfill;
         this.udalShardkeyColumn = udalShardkeyColumn;
+        this.isAddMeta = isAddMeta;
     }
 
     public String getHostname() {
@@ -236,5 +239,9 @@ public class MySqlSourceConfig implements Serializable {
 
     public String getUdalShardkeyColumn() {
         return udalShardkeyColumn;
+    }
+
+    public boolean isAddMeta() {
+        return isAddMeta;
     }
 }

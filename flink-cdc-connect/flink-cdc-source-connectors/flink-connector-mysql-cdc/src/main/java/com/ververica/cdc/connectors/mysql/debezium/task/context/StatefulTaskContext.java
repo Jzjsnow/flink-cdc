@@ -199,7 +199,10 @@ public class StatefulTaskContext {
 
         if (!isBinlogAvailable(mySqlOffsetContext)) {
             throw new IllegalStateException(
-                    "The connector is trying to read binlog starting at "
+                    connectorConfig.hostname()
+                            + "-"
+                            + connectorConfig.port()
+                            + ": The connector is trying to read binlog starting at "
                             + mySqlOffsetContext.getSourceInfo()
                             + ", but this is no longer "
                             + "available on the server. Reconfigure the connector to use a snapshot when needed.");

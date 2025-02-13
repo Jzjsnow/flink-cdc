@@ -256,4 +256,11 @@ public class MySqlDataSourceOptions {
                     .noDefaultValue()
                     .withDescription(
                             "The sharding key column of the shard database creates a joint primary key for the target table.It will be used in the udal scenario. This field is the sharding key of the udal table, and all tables are required to have this sharding key field.");
+
+    @Experimental
+    public static final ConfigOption<Boolean> IS_ADD_META =
+            ConfigOptions.key("meta.enabled")
+                    .booleanType()
+                    .defaultValue(false)
+                    .withDescription("Whether to add IP address information in meta injury.");
 }

@@ -46,7 +46,10 @@ public class MySqlDataSource implements DataSource {
                 new MySqlEventDeserializer(
                         DebeziumChangelogMode.ALL,
                         sourceConfig.isIncludeSchemaChanges(),
-                        sourceConfig.getServerTimeZone());
+                        sourceConfig.getServerTimeZone(),
+                        sourceConfig.getHostname(),
+                        String.valueOf(sourceConfig.getPort()),
+                        sourceConfig.isAddMeta());
 
         MySqlSource<Event> source =
                 new MySqlSource<>(

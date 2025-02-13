@@ -30,6 +30,7 @@ import com.ververica.cdc.common.schema.Column;
 import com.ververica.cdc.common.schema.Schema;
 import com.ververica.cdc.common.utils.Preconditions;
 import com.ververica.cdc.common.utils.SchemaUtils;
+import org.apache.commons.lang3.StringUtils;
 import org.apache.doris.flink.sink.writer.serializer.DorisRecord;
 import org.apache.doris.flink.sink.writer.serializer.DorisRecordSerializer;
 
@@ -55,6 +56,9 @@ public class DorisEventSerializer implements DorisRecordSerializer<Event> {
     /** Format timestamp-related type data. */
     public static final DateTimeFormatter DATE_TIME_FORMATTER =
             DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss.SSSSSS");
+
+    private static final String HOSTNAME = "hostname";
+    private static final String PORT = "port";
 
     /** ZoneId from pipeline config to support timestamp with local time zone. */
     public final ZoneId pipelineZoneId;
@@ -95,11 +99,11 @@ public class DorisEventSerializer implements DorisRecordSerializer<Event> {
             case INSERT:
             case UPDATE:
             case REPLACE:
-                valueMap = serializerRecord(event.after(), schema);
+                valueMap = serializerRecord(event.after(), schema, event.meta(), tableId);
                 addDeleteSign(valueMap, false);
                 break;
             case DELETE:
-                valueMap = serializerRecord(event.before(), schema);
+                valueMap = serializerRecord(event.before(), schema, event.meta(), tableId);
                 addDeleteSign(valueMap, true);
                 break;
             default:
@@ -113,12 +117,26 @@ public class DorisEventSerializer implements DorisRecordSerializer<Event> {
     }
 
     /** serializer RecordData to Doris Value. */
-    public Map<String, Object> serializerRecord(RecordData recordData, Schema schema) {
+    public Map<String, Object> serializerRecord(
+            RecordData recordData, Schema schema, Map<String, String> meta, TableId tableId) {
+        String hostname = meta.get(HOSTNAME);
+        String port = meta.get(PORT);
         List<Column> columns = schema.getColumns();
         Map<String, Object> record = new HashMap<>();
-        Preconditions.checkState(
-                columns.size() == recordData.getArity(),
-                "Column size does not match the data size");
+        if (StringUtils.isBlank(hostname) && StringUtils.isBlank(port)) {
+            Preconditions.checkState(
+                    columns.size() == recordData.getArity(),
+                    " Column size does not match the data size");
+        } else {
+            Preconditions.checkState(
+                    columns.size() == recordData.getArity(),
+                    hostname
+                            + "-"
+                            + port
+                            + "-"
+                            + tableId
+                            + ": Column size does not match the data size");
+        }
 
         for (int i = 0; i < recordData.getArity(); i++) {
             DorisRowConverter.SerializationConverter converter =

@@ -141,7 +141,9 @@ public class PostgresDataSource implements DataSource, SupportsReadingMetadata {
                 new PostgresEventDeserializer(
                         DebeziumChangelogMode.ALL,
                         config.get(PostgresDataSourceOptions.SCHEMA_CHANGE_ENABLED),
-                        sourceConfig.getServerTimeZone());
+                        sourceConfig.getServerTimeZone(),
+                        sourceConfig.getHostname(),
+                        String.valueOf(sourceConfig.getPort()));
         PostgresOffsetFactory offsetFactory = new PostgresOffsetFactory();
         Properties properties = new Properties();
         Map configMap = getPropertiesByPrefix(config, DEBEZIUM_PROPERTIES_PREFIX);

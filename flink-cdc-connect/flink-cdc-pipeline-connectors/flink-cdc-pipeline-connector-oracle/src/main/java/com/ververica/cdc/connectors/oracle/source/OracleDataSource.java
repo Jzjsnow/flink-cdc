@@ -130,7 +130,9 @@ public class OracleDataSource implements DataSource, SupportsReadingMetadata {
                 new OracleEventDeserializer(
                         DebeziumChangelogMode.ALL,
                         config.get(OracleDataSourceOptions.SCHEMA_CHANGE_ENABLED),
-                        sourceConfig.getServerTimeZone());
+                        sourceConfig.getServerTimeZone(),
+                        sourceConfig.getHostname(),
+                        String.valueOf(sourceConfig.getPort()));
 
         RedoLogOffsetFactory offsetFactory = new RedoLogOffsetFactory();
         if (enableParallelRead) {

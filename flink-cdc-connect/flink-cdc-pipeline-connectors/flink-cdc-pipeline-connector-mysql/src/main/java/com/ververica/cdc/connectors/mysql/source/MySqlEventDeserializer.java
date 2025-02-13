@@ -60,6 +60,9 @@ public class MySqlEventDeserializer extends DebeziumEventDeserializationSchema {
 
     private transient Tables tables;
     private transient CustomMySqlAntlrDdlParser customParser;
+    private String hostname;
+    private String port;
+    private boolean isAddMeta;
 
     public MySqlEventDeserializer(
             DebeziumChangelogMode changelogMode, boolean includeSchemaChanges) {
@@ -70,9 +73,15 @@ public class MySqlEventDeserializer extends DebeziumEventDeserializationSchema {
     public MySqlEventDeserializer(
             DebeziumChangelogMode changelogMode,
             boolean includeSchemaChanges,
-            String sourceTimeZone) {
+            String sourceTimeZone,
+            String hostname,
+            String port,
+            boolean isAddMeta) {
         super(new MySqlSchemaDataTypeInference(), changelogMode, sourceTimeZone);
         this.includeSchemaChanges = includeSchemaChanges;
+        this.hostname = hostname;
+        this.port = port;
+        this.isAddMeta = isAddMeta;
     }
 
     @Override
@@ -124,7 +133,12 @@ public class MySqlEventDeserializer extends DebeziumEventDeserializationSchema {
 
     @Override
     protected Map<String, String> getMetadata(SourceRecord record) {
-        return Collections.emptyMap();
+        Map<String, String> map = new HashMap<>();
+        if (isAddMeta) {
+            map.put(MySqlDataSourceOptions.HOSTNAME.key(), hostname);
+            map.put(MySqlDataSourceOptions.PORT.key(), port);
+        }
+        return map;
     }
 
     @Override

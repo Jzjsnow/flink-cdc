@@ -57,6 +57,7 @@ import static com.ververica.cdc.connectors.mysql.source.MySqlDataSourceOptions.C
 import static com.ververica.cdc.connectors.mysql.source.MySqlDataSourceOptions.CONNECT_TIMEOUT;
 import static com.ververica.cdc.connectors.mysql.source.MySqlDataSourceOptions.HEARTBEAT_INTERVAL;
 import static com.ververica.cdc.connectors.mysql.source.MySqlDataSourceOptions.HOSTNAME;
+import static com.ververica.cdc.connectors.mysql.source.MySqlDataSourceOptions.IS_ADD_META;
 import static com.ververica.cdc.connectors.mysql.source.MySqlDataSourceOptions.PASSWORD;
 import static com.ververica.cdc.connectors.mysql.source.MySqlDataSourceOptions.PORT;
 import static com.ververica.cdc.connectors.mysql.source.MySqlDataSourceOptions.SCAN_INCREMENTAL_CLOSE_IDLE_READER_ENABLED;
@@ -129,6 +130,7 @@ public class MySqlDataSourceFactory implements DataSourceFactory {
         validateDistributionFactorUpper(distributionFactorUpper);
         validateDistributionFactorLower(distributionFactorLower);
         String udalShardkeyColumn = config.get(UDAL_SHARDKEY_COLUMN);
+        boolean isAddMeta = config.get(IS_ADD_META);
 
         Map<String, String> configMap = config.toMap();
         OptionUtils.printOptions(IDENTIFIER, config.toMap());
@@ -158,7 +160,8 @@ public class MySqlDataSourceFactory implements DataSourceFactory {
                         .debeziumProperties(getDebeziumProperties(configMap))
                         .jdbcProperties(getJdbcProperties(configMap))
                         .udalShardkeyColumn(udalShardkeyColumn)
-                        .scanNewlyAddedTableEnabled(scanNewlyAddedTableEnabled);
+                        .scanNewlyAddedTableEnabled(scanNewlyAddedTableEnabled)
+                        .isAddMeta(isAddMeta);
 
         Selectors selectors = new Selectors.SelectorsBuilder().includeTables(tables).build();
         String[] capturedTables = getTableList(configFactory.createConfig(0), selectors);

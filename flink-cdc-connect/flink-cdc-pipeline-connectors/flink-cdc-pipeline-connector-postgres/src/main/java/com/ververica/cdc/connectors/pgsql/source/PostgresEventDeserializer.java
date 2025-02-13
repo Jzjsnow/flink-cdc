@@ -61,12 +61,20 @@ public class PostgresEventDeserializer extends DebeziumEventDeserializationSchem
 
     private transient CustomPgSqlAntlrDdlParser customParser;
 
+    private String hostname;
+
+    private String port;
+
     public PostgresEventDeserializer(
             DebeziumChangelogMode changelogMode,
             boolean includeSchemaChanges,
-            String sourceTimeZone) {
+            String sourceTimeZone,
+            String hostname,
+            String port) {
         super(new PostgresSchemaDataTypeInference(), changelogMode, sourceTimeZone);
         this.includeSchemaChanges = includeSchemaChanges;
+        this.hostname = hostname;
+        this.port = port;
     }
 
     @Override
@@ -118,7 +126,10 @@ public class PostgresEventDeserializer extends DebeziumEventDeserializationSchem
 
     @Override
     protected Map<String, String> getMetadata(SourceRecord record) {
-        return Collections.emptyMap();
+        Map<String, String> map = new HashMap<>();
+        map.put(PostgresDataSourceOptions.HOSTNAME.key(), hostname);
+        map.put(PostgresDataSourceOptions.PG_PORT.key(), port);
+        return map;
     }
 
     @Override

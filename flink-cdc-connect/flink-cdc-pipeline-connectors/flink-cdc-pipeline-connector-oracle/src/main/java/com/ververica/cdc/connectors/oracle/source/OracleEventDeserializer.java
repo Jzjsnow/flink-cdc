@@ -61,12 +61,20 @@ public class OracleEventDeserializer extends DebeziumEventDeserializationSchema 
 
     private transient OracleAntlrDdlParser customParser;
 
+    private String hostname;
+
+    private String port;
+
     public OracleEventDeserializer(
             DebeziumChangelogMode changelogMode,
             boolean includeSchemaChanges,
-            String sourceTimeZone) {
+            String sourceTimeZone,
+            String hostname,
+            String port) {
         super(new OracleSchemaDataTypeInference(), changelogMode, sourceTimeZone);
         this.includeSchemaChanges = includeSchemaChanges;
+        this.hostname = hostname;
+        this.port = port;
     }
 
     @Override
@@ -119,7 +127,10 @@ public class OracleEventDeserializer extends DebeziumEventDeserializationSchema 
 
     @Override
     protected Map<String, String> getMetadata(SourceRecord record) {
-        return Collections.emptyMap();
+        Map<String, String> map = new HashMap<>();
+        map.put(OracleDataSourceOptions.HOSTNAME.key(), hostname);
+        map.put(OracleDataSourceOptions.PORT.key(), port);
+        return map;
     }
 
     @Override
