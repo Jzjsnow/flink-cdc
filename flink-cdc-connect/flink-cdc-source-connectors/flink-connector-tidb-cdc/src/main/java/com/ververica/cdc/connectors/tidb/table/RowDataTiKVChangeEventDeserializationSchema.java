@@ -51,7 +51,7 @@ public class RowDataTiKVChangeEventDeserializationSchema
             TypeInformation<RowData> resultTypeInfo,
             TiKVMetadataConverter[] metadataConverters,
             RowType physicalDataType) {
-        super(tiConf, database, tableName, metadataConverters, physicalDataType);
+        super(tiConf, metadataConverters, null, physicalDataType);
         this.resultTypeInfo = checkNotNull(resultTypeInfo);
     }
 

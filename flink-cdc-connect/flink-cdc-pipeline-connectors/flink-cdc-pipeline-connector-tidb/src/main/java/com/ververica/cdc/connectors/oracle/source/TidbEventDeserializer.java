@@ -34,12 +34,17 @@ import com.ververica.cdc.connectors.oracle.utils.RowConvertUtils;
 import com.ververica.cdc.connectors.oracle.utils.SchemaUtils;
 import com.ververica.cdc.connectors.tidb.TiKVChangeEventDeserializationSchema;
 import com.ververica.cdc.connectors.tidb.table.RowDataTiKVEventDeserializationSchemaBase;
+import com.ververica.cdc.connectors.tidb.table.TiKVDeserializationRuntimeConverter;
 import com.ververica.cdc.connectors.tidb.table.TiKVMetadataConverter;
+import com.ververica.cdc.connectors.tidb.table.dto.TableInfo;
 import org.tikv.common.TiConfiguration;
 import org.tikv.common.key.RowKey;
+import org.tikv.common.meta.TiTableInfo;
 import org.tikv.kvproto.Cdcpb;
 
 import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 
 import static org.apache.flink.util.Preconditions.checkNotNull;
 import static org.tikv.common.codec.TableCodec.decodeObjects;
@@ -54,41 +59,43 @@ public class TidbEventDeserializer extends RowDataTiKVEventDeserializationSchema
     /** TypeInformation of the produced {@link RowData}. * */
     private final TypeInformation<Event> resultTypeInfo;
 
-    private String database;
-    private String tableName;
     private JdbcInfo jdbcInfo;
-    private com.ververica.cdc.common.schema.Schema schema;
+    private List<TableId> tables;
+
+    private Map<Long, TableInfo> tableIdMap;
 
     public TidbEventDeserializer(
             TiConfiguration tiConf,
-            String database,
-            String tableName,
             TypeInformation<Event> resultTypeInfo,
             TiKVMetadataConverter[] metadataConverters,
-            RowType physicalDataType,
-            JdbcInfo jdbcInfo) {
-        super(tiConf, database, tableName, metadataConverters, physicalDataType);
-        this.database = database;
-        this.tableName = tableName;
+            Map<String, RowType> physicalDataTypes,
+            JdbcInfo jdbcInfo,
+            List<TableId> tables) {
+        super(tiConf, metadataConverters, physicalDataTypes, null);
         this.resultTypeInfo = checkNotNull(resultTypeInfo);
         this.jdbcInfo = jdbcInfo;
+        this.tables = tables;
     }
 
     @Override
     public void deserialize(Cdcpb.Event.Row row, Collector<Event> out) throws Exception {
-        if (tableInfo == null) {
-            tableInfo = fetchTableInfo();
+        if (tableIdMap == null) {
+            tableIdMap = fetchTableIdMap(tables);
         }
+        long tableIdNum = RowKey.decode(row.getKey().toByteArray()).getTableId();
+        TableInfo tableDto = tableIdMap.get(tableIdNum);
+        TiTableInfo tableInfo = tableDto.getTableInfo();
         final RowKey rowKey = RowKey.decode(row.getKey().toByteArray());
         final long handle = rowKey.getHandle();
         Object[] tikvValues;
         DataChangeEvent event;
+        String database = tableDto.getTableName().split("\\.")[0];
+        String tableName = tableDto.getTableName().split("\\.")[1];
         TableId tableId = TableId.tableId(database, tableName);
-        io.debezium.relational.TableId relationalTableId =
-                io.debezium.relational.TableId.parse(database + "." + tableName);
-        if (schema == null) {
-            schema = SchemaUtils.getSchema(relationalTableId, jdbcInfo);
-        }
+        com.ververica.cdc.common.schema.Schema schema =
+                SchemaUtils.getSchema(database + "." + tableName, jdbcInfo);
+        TiKVDeserializationRuntimeConverter physicalConverter =
+                physicalConverterMap.get(database + "." + tableName);
         switch (row.getOpType()) {
             case DELETE:
                 tikvValues = decodeObjects(row.getOldValue().toByteArray(), handle, tableInfo);

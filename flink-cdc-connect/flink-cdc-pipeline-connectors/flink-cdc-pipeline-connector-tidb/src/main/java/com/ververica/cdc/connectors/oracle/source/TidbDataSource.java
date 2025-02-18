@@ -21,14 +21,15 @@ import org.apache.flink.streaming.api.functions.source.SourceFunction;
 import org.apache.flink.table.api.ValidationException;
 import org.apache.flink.table.catalog.ResolvedSchema;
 import org.apache.flink.table.connector.source.DynamicTableSource;
-import org.apache.flink.table.connector.source.abilities.SupportsReadingMetadata;
 import org.apache.flink.table.runtime.typeutils.InternalTypeInfo;
 import org.apache.flink.table.types.DataType;
 import org.apache.flink.table.types.logical.RowType;
 import org.apache.flink.table.types.utils.DataTypeUtils;
 
+import com.esotericsoftware.minlog.Log;
 import com.ververica.cdc.common.configuration.Configuration;
 import com.ververica.cdc.common.event.Event;
+import com.ververica.cdc.common.event.TableId;
 import com.ververica.cdc.common.source.DataSource;
 import com.ververica.cdc.common.source.EventSourceProvider;
 import com.ververica.cdc.common.source.FlinkSourceFunctionProvider;
@@ -39,20 +40,18 @@ import com.ververica.cdc.connectors.oracle.utils.SchemaUtils;
 import com.ververica.cdc.connectors.tidb.TDBSourceOptions;
 import com.ververica.cdc.connectors.tidb.table.StartupOptions;
 import com.ververica.cdc.connectors.tidb.table.TiKVMetadataConverter;
-import com.ververica.cdc.connectors.tidb.table.TiKVReadableMetadata;
-import io.debezium.relational.TableId;
 import org.tikv.common.TiConfiguration;
 
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.stream.Stream;
 
 import static com.ververica.cdc.connectors.oracle.source.TidbDataSourceOptions.SCAN_STARTUP_MODE;
 
 /** A {@link DynamicTableSource} description. */
-public class TidbDataSource implements DataSource, SupportsReadingMetadata {
+public class TidbDataSource implements DataSource {
 
     private static final String SCAN_STARTUP_MODE_VALUE_INITIAL = "initial";
     private static final String SCAN_STARTUP_MODE_VALUE_LATEST = "latest-offset";
@@ -71,27 +70,45 @@ public class TidbDataSource implements DataSource, SupportsReadingMetadata {
 
     @Override
     public EventSourceProvider getEventSourceProvider() {
-        String database = config.get(TidbDataSourceOptions.DATABASE);
-        String tablename = config.get(TidbDataSourceOptions.TABLE);
         String hostname = config.get(TidbDataSourceOptions.HOSTNAME);
         int pdPort = config.get(TidbDataSourceOptions.PD_PORT);
         int tidbPort = config.get(TidbDataSourceOptions.TIDB_PORT);
         String username = config.get(TidbDataSourceOptions.USERNAME);
         String password = config.get(TidbDataSourceOptions.PASSWORD);
+        List<String> tables = Arrays.asList(config.get(TidbDataSourceOptions.TABLES));
+        int snapshotWorkerNums = config.get(TidbDataSourceOptions.SNAPSHOT_WORKER_NUMS);
+
         JdbcInfo jdbcInfo = new JdbcInfo();
         jdbcInfo.setPassword(password);
-        jdbcInfo.setDatabase(database);
+        jdbcInfo.setDatabase(
+                "INFORMATION_SCHEMA"); // tidb system database,as the database of the jdbc url
         jdbcInfo.setHost(hostname);
         jdbcInfo.setPort(tidbPort);
         jdbcInfo.setUsername(username);
-        io.debezium.relational.TableId tableId = TableId.parse(database + "." + tablename);
-        ResolvedSchema schema = SchemaUtils.getResolvedSchema(tableId, jdbcInfo);
+        List<TableId> capturedTableIds = SchemaUtils.getCapturedTableIds(tables, jdbcInfo);
+
         String keyFile = config.get(TidbDataSourceOptions.TLS_KEY_FILE);
         String certFile = config.get(TidbDataSourceOptions.TLS_CERT_FILE);
         String chainFile = config.get(TidbDataSourceOptions.TLS_CHAINFILE);
         String sourceTimeZone = config.get(TidbDataSourceOptions.SERVER_TIME_ZONE);
         String ip = config.get(TidbDataSourceOptions.HOSTNAME);
-        RowType physicalDataType = (RowType) schema.toPhysicalRowDataType().getLogicalType();
+        Map<String, RowType> physicalDataTypes = new HashMap<>();
+        ResolvedSchema schema = null;
+        for (TableId capturedTableId : capturedTableIds) {
+            Log.info(
+                    "capturedTables: "
+                            + capturedTableId.getSchemaName()
+                            + "."
+                            + capturedTableId.getTableName());
+            TableId tableId =
+                    TableId.parse(
+                            capturedTableId.getSchemaName() + "." + capturedTableId.getTableName());
+            schema = SchemaUtils.getResolvedSchema(tableId, jdbcInfo);
+            RowType physicalDataType = (RowType) schema.toPhysicalRowDataType().getLogicalType();
+            physicalDataTypes.put(
+                    capturedTableId.getSchemaName() + "." + capturedTableId.getTableName(),
+                    physicalDataType);
+        }
         TiKVMetadataConverter[] metadataConverters = getMetadataConverters();
         DataType producedDataType = schema.toPhysicalRowDataType();
         TypeInformation<Event> typeInfo =
@@ -106,31 +123,29 @@ public class TidbDataSource implements DataSource, SupportsReadingMetadata {
         TidbEventDeserializer seriliazer =
                 new TidbEventDeserializer(
                         tfconf,
-                        database,
-                        tablename,
                         typeInfo,
                         metadataConverters,
-                        physicalDataType,
-                        jdbcInfo);
+                        physicalDataTypes,
+                        jdbcInfo,
+                        capturedTableIds);
         TidbSnapshotEventDeserializer snapshotEventDeserializer =
                 new TidbSnapshotEventDeserializer(
                         tfconf,
-                        database,
-                        tablename,
                         typeInfo,
                         metadataConverters,
-                        physicalDataType,
+                        physicalDataTypes,
                         sourceTimeZone,
-                        jdbcInfo);
+                        jdbcInfo,
+                        capturedTableIds);
         SourceFunction<Event> tidbSource =
                 TiDBSourceReader.<Event>builder()
-                        .database(database) // set captured database
-                        .tableName(tablename) // set captured table
                         .tiConf(tfconf)
                         .snapshotEventDeserializer(snapshotEventDeserializer)
                         .changeEventDeserializer(seriliazer)
                         .startupOptions(getStartupOptions(config))
                         .jdbcInfo(jdbcInfo)
+                        .tables(capturedTableIds)
+                        .snapshotWorkerNums(snapshotWorkerNums)
                         .build();
         return FlinkSourceFunctionProvider.of(tidbSource);
     }
@@ -163,41 +178,10 @@ public class TidbDataSource implements DataSource, SupportsReadingMetadata {
 
     @Override
     public MetadataAccessor getMetadataAccessor() {
-        return null;
-    }
-
-    @Override
-    public Map<String, DataType> listReadableMetadata() {
-        return null;
-    }
-
-    @Override
-    public void applyReadableMetadata(List<String> metadataKeys, DataType producedDataType) {
-        this.metadataKeys = metadataKeys;
-        this.producedDataType = producedDataType;
-    }
-
-    @Override
-    public boolean supportsMetadataProjection() {
-        return SupportsReadingMetadata.super.supportsMetadataProjection();
+        return new TidbMetadataAccessor(config);
     }
 
     private TiKVMetadataConverter[] getMetadataConverters() {
-        if (metadataKeys.isEmpty()) {
-            return new TiKVMetadataConverter[0];
-        }
-        String database = config.get(TidbDataSourceOptions.DATABASE);
-        String tableName = config.get(TidbDataSourceOptions.TABLE);
-        return metadataKeys.stream()
-                .map(
-                        key ->
-                                Stream.of(
-                                                TiKVReadableMetadata.createTiKVReadableMetadata(
-                                                        database, tableName))
-                                        .filter(m -> m.getKey().equals(key))
-                                        .findFirst()
-                                        .orElseThrow(IllegalStateException::new))
-                .map(TiKVReadableMetadata::getConverter)
-                .toArray(TiKVMetadataConverter[]::new);
+        return new TiKVMetadataConverter[0];
     }
 }

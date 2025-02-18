@@ -31,13 +31,17 @@ import com.ververica.cdc.connectors.oracle.utils.RowConvertUtils;
 import com.ververica.cdc.connectors.oracle.utils.SchemaUtils;
 import com.ververica.cdc.connectors.tidb.TiKVSnapshotEventDeserializationSchema;
 import com.ververica.cdc.connectors.tidb.table.RowDataTiKVEventDeserializationSchemaBase;
+import com.ververica.cdc.connectors.tidb.table.TiKVDeserializationRuntimeConverter;
 import com.ververica.cdc.connectors.tidb.table.TiKVMetadataConverter;
+import com.ververica.cdc.connectors.tidb.table.dto.TableInfo;
 import com.ververica.cdc.debezium.table.DeserializationRuntimeConverter;
 import org.tikv.common.TiConfiguration;
 import org.tikv.common.key.RowKey;
+import org.tikv.common.meta.TiTableInfo;
 import org.tikv.kvproto.Kvrpcpb;
 
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -55,55 +59,55 @@ public class TidbSnapshotEventDeserializer extends RowDataTiKVEventDeserializati
     private static final Map<DataType, DeserializationRuntimeConverter> CONVERTERS =
             new ConcurrentHashMap<>();
 
-    private String database;
-    private String tableName;
-
     private final String sourceTimeZone;
-
     private JdbcInfo jdbcInfo;
-    private com.ververica.cdc.common.schema.Schema schema;
+    private Map<Long, TableInfo> tableIdMap;
+    private List<TableId> tables;
 
     public TidbSnapshotEventDeserializer(
             TiConfiguration tiConf,
-            String database,
-            String tableName,
             TypeInformation<Event> resultTypeInfo,
             TiKVMetadataConverter[] metadataConverters,
-            RowType physicalDataType,
+            Map<String, RowType> physicalDataTypes,
             String sourceTimeZone,
-            JdbcInfo jdbcInfo) {
+            JdbcInfo jdbcInfo,
+            List<TableId> tables) {
 
-        super(tiConf, database, tableName, metadataConverters, physicalDataType);
-        this.database = database;
-        this.tableName = tableName;
+        super(tiConf, metadataConverters, physicalDataTypes, null);
         this.resultTypeInfo = checkNotNull(resultTypeInfo);
         this.sourceTimeZone = sourceTimeZone;
         this.jdbcInfo = jdbcInfo;
+        this.tables = tables;
     }
 
     @Override
     public void deserialize(Kvrpcpb.KvPair record, Collector out) throws Exception {
-        if (tableInfo == null) {
-            tableInfo = fetchTableInfo();
+        if (tableIdMap == null) {
+            tableIdMap = fetchTableIdMap(tables);
         }
-        TableId tableId = TableId.tableId(database, tableName);
-        io.debezium.relational.TableId relationalTableId =
-                io.debezium.relational.TableId.parse(database + "." + tableName);
-        if (schema == null) {
-            schema = SchemaUtils.getSchema(relationalTableId, jdbcInfo);
-        }
+        long tableIdNum = RowKey.decode(record.getKey().toByteArray()).getTableId();
+        TableInfo tableDto = tableIdMap.get(tableIdNum);
+        TiTableInfo tableInfo = tableDto.getTableInfo();
 
+        String database = tableDto.getTableName().split("\\.")[0];
+        String tableName = tableDto.getTableName().split("\\.")[1];
+        com.ververica.cdc.common.schema.Schema schema =
+                SchemaUtils.getSchema(tableDto.getTableName(), jdbcInfo);
         Object[] tikvValues =
                 decodeObjects(
                         record.getValue().toByteArray(),
                         RowKey.decode(record.getKey().toByteArray()).getHandle(),
                         tableInfo);
+        TiKVDeserializationRuntimeConverter physicalConverter =
+                physicalConverterMap.get(database + "." + tableName);
         GenericRowData row =
                 (GenericRowData) physicalConverter.convert(tikvValues, tableInfo, null);
         RowConvertUtils.sourceTimeZone = sourceTimeZone;
         DataChangeEvent event =
                 DataChangeEvent.insertEvent(
-                        tableId, RowConvertUtils.convert(row, schema), new HashMap<>());
+                        TableId.tableId(database, tableName),
+                        RowConvertUtils.convert(row, schema),
+                        new HashMap<>());
         out.collect(event);
     }
 

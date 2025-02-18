@@ -19,14 +19,20 @@ package com.ververica.cdc.connectors.oracle.source.reader;
 import org.apache.flink.streaming.api.functions.source.RichParallelSourceFunction;
 
 import com.ververica.cdc.common.event.Event;
+import com.ververica.cdc.common.event.TableId;
 import com.ververica.cdc.connectors.oracle.dto.JdbcInfo;
 import com.ververica.cdc.connectors.tidb.TiKVChangeEventDeserializationSchema;
 import com.ververica.cdc.connectors.tidb.TiKVSnapshotEventDeserializationSchema;
 import com.ververica.cdc.connectors.tidb.table.StartupOptions;
+import org.slf4j.LoggerFactory;
 import org.tikv.common.TiConfiguration;
+
+import java.util.ArrayList;
+import java.util.List;
 
 /** A builder to build a SourceFunction which can read snapshot and continue to read CDC events. */
 public class TiDBSourceReader {
+    private static final org.slf4j.Logger LOG = LoggerFactory.getLogger(TiDBSourceReader.class);
 
     public static TiDBSourceReader.Builder<Event> builder() {
         return new TiDBSourceReader.Builder();
@@ -34,24 +40,24 @@ public class TiDBSourceReader {
 
     /** Builder class of {@link com.ververica.cdc.connectors.tidb.TiDBSource}. */
     public static class Builder<T> {
-        private String database;
-        private String tableName;
         private StartupOptions startupOptions = StartupOptions.initial();
         private TiConfiguration tiConf;
         private JdbcInfo jdbcInfo;
+        private List<TableId> tables;
+        private int snapshotWorkerNums;
 
         private TiKVSnapshotEventDeserializationSchema<Event> snapshotEventDeserializationSchema;
         private TiKVChangeEventDeserializationSchema<Event> changeEventDeserializationSchema;
 
-        /** Database name to be monitored. */
-        public Builder<T> database(String database) {
-            this.database = database;
+        /** TableName name to be monitored. */
+        public Builder<T> tables(List<TableId> tables) {
+            this.tables = tables;
             return this;
         }
 
-        /** TableName name to be monitored. */
-        public Builder<T> tableName(String tableName) {
-            this.tableName = tableName;
+        /** Number of concurrent threads for snapshots. */
+        public Builder<T> snapshotWorkerNums(int snapshotWorkerNums) {
+            this.snapshotWorkerNums = snapshotWorkerNums;
             return this;
         }
 
@@ -87,15 +93,20 @@ public class TiDBSourceReader {
         }
 
         public RichParallelSourceFunction<Event> build() {
-
+            List<String> tableList = new ArrayList<>();
+            for (TableId tableId : tables) {
+                tableList.add(tableId.getSchemaName() + "." + tableId.getTableName());
+                LOG.info("including table {} for further processing", tableId);
+            }
             return new TidbParallelSourceFunction(
                     snapshotEventDeserializationSchema,
                     changeEventDeserializationSchema,
                     tiConf,
                     startupOptions.startupMode,
-                    database,
-                    tableName,
-                    jdbcInfo);
+                    //                    tables,
+                    jdbcInfo,
+                    tableList,
+                    snapshotWorkerNums);
         }
     }
 }

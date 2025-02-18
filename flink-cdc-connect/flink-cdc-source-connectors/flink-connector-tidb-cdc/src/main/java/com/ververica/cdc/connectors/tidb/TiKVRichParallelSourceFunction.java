@@ -30,8 +30,6 @@ import org.apache.flink.streaming.api.functions.source.RichParallelSourceFunctio
 import org.apache.flink.util.Collector;
 import org.apache.flink.util.FlinkRuntimeException;
 
-import org.apache.flink.shaded.guava30.com.google.common.util.concurrent.ThreadFactoryBuilder;
-
 import com.ververica.cdc.connectors.tidb.table.StartupMode;
 import com.ververica.cdc.connectors.tidb.table.utils.TableKeyRangeUtils;
 import org.slf4j.Logger;
@@ -44,15 +42,20 @@ import org.tikv.common.meta.TiTableInfo;
 import org.tikv.kvproto.Cdcpb;
 import org.tikv.kvproto.Coprocessor;
 import org.tikv.kvproto.Kvrpcpb;
+import org.tikv.shade.com.google.common.util.concurrent.ThreadFactoryBuilder;
 import org.tikv.shade.com.google.protobuf.ByteString;
 import org.tikv.txn.KVClient;
 
+import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.TreeMap;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.TimeUnit;
@@ -73,13 +76,13 @@ public class TiKVRichParallelSourceFunction<T> extends RichParallelSourceFunctio
     private final TiKVChangeEventDeserializationSchema<T> changeEventDeserializationSchema;
     private final TiConfiguration tiConf;
     private final StartupMode startupMode;
-    private final String database;
-    private final String tableName;
 
     /** Task local variables. */
     private transient TiSession session = null;
 
     private transient Coprocessor.KeyRange keyRange = null;
+    private List<Coprocessor.KeyRange> keyRanges = null;
+    private Map<Long, Coprocessor.KeyRange> keyRangeMap = null;
     private transient CDCClient cdcClient = null;
     private transient SourceContext<T> sourceContext = null;
     private transient volatile long resolvedTs = -1L;
@@ -99,36 +102,52 @@ public class TiKVRichParallelSourceFunction<T> extends RichParallelSourceFunctio
     private volatile boolean exceptionFlag = false;
     private volatile FlinkRuntimeException runtimeException;
 
+    private final List<String> tables;
+
+    private int snapshotWorkerNums;
+
     public TiKVRichParallelSourceFunction(
             TiKVSnapshotEventDeserializationSchema<T> snapshotEventDeserializationSchema,
             TiKVChangeEventDeserializationSchema<T> changeEventDeserializationSchema,
             TiConfiguration tiConf,
             StartupMode startupMode,
-            String database,
-            String tableName) {
+            List<String> tables,
+            Integer snapshotWorkerNums) {
         this.snapshotEventDeserializationSchema = snapshotEventDeserializationSchema;
         this.changeEventDeserializationSchema = changeEventDeserializationSchema;
         this.tiConf = tiConf;
         this.startupMode = startupMode;
-        this.database = database;
-        this.tableName = tableName;
+        this.tables = tables;
+        this.snapshotWorkerNums = snapshotWorkerNums == null ? 5 : snapshotWorkerNums;
     }
 
     @Override
     public void open(final Configuration config) throws Exception {
+        keyRanges = new ArrayList<>();
+        keyRangeMap = new HashMap<>();
         super.open(config);
         session = TiSession.create(tiConf);
-        TiTableInfo tableInfo = session.getCatalog().getTable(database, tableName);
-        if (tableInfo == null) {
-            throw new RuntimeException(
-                    String.format("Table %s.%s does not exist.", database, tableName));
+        for (String capturedTableId : tables) {
+            TiTableInfo tableInfo =
+                    session.getCatalog()
+                            .getTable(
+                                    capturedTableId.split("\\.")[0],
+                                    capturedTableId.split("\\.")[1]);
+
+            if (tableInfo == null) {
+                throw new RuntimeException(
+                        String.format(
+                                "Table %s.%s does not exist.",
+                                capturedTableId.split("\\.")[0], capturedTableId.split("\\.")[1]));
+            }
+            long tableId = tableInfo.getId();
+            keyRange =
+                    TableKeyRangeUtils.getTableKeyRange(
+                            tableId,
+                            getRuntimeContext().getNumberOfParallelSubtasks(),
+                            getRuntimeContext().getIndexOfThisSubtask());
+            keyRanges.add(keyRange);
         }
-        long tableId = tableInfo.getId();
-        keyRange =
-                TableKeyRangeUtils.getTableKeyRange(
-                        tableId,
-                        getRuntimeContext().getNumberOfParallelSubtasks(),
-                        getRuntimeContext().getIndexOfThisSubtask());
         cdcClient = new CDCClient(session, keyRange);
         prewrites = new TreeMap<>();
         commits = new TreeMap<>();
@@ -156,16 +175,39 @@ public class TiKVRichParallelSourceFunction<T> extends RichParallelSourceFunctio
         outputCollector.context = sourceContext;
 
         if (startupMode == StartupMode.INITIAL) {
-            synchronized (sourceContext.getCheckpointLock()) {
-                readSnapshotEvents();
+            ExecutorService executorService = Executors.newFixedThreadPool(snapshotWorkerNums);
+            List<Future<?>> futures = new ArrayList<>();
+            for (Coprocessor.KeyRange keyRange : keyRanges) {
+                futures.add(
+                        executorService.submit(
+                                () -> {
+                                    try {
+                                        readSnapshotEvents(keyRange);
+                                    } catch (Exception e) {
+                                        throw new RuntimeException(e);
+                                    }
+                                }));
             }
+            executorService.shutdown();
+            for (Future<?> future : futures) {
+                try {
+                    future.get();
+                } catch (Exception e) {
+                    Thread.currentThread().interrupt();
+                    throw new RuntimeException("snapshot Exception", e);
+                }
+            }
+            LOG.info("All tasks completed, main thread continues.");
         } else {
             LOG.info("Skip snapshot read");
             resolvedTs = session.getTimestamp().getVersion();
         }
-
         LOG.info("start read change events");
-        cdcClient.start(resolvedTs);
+        if (keyRangeMap.size() == 0) {
+            cdcClient.startSkipSnapshot(resolvedTs, keyRanges);
+        } else {
+            cdcClient.start(keyRangeMap);
+        }
         running = true;
         readChangeEvents();
     }
@@ -195,7 +237,7 @@ public class TiKVRichParallelSourceFunction<T> extends RichParallelSourceFunctio
         }
     }
 
-    protected void readSnapshotEvents() throws Exception {
+    protected void readSnapshotEvents(Coprocessor.KeyRange keyRange) throws Exception {
         LOG.info("read snapshot events");
         try (KVClient scanClient = session.createKVClient()) {
             long startTs = session.getTimestamp().getVersion();
@@ -203,9 +245,9 @@ public class TiKVRichParallelSourceFunction<T> extends RichParallelSourceFunctio
             while (true) {
                 final List<Kvrpcpb.KvPair> segment =
                         scanClient.scan(start, keyRange.getEnd(), startTs);
-
                 if (segment.isEmpty()) {
                     resolvedTs = startTs;
+                    keyRangeMap.put(resolvedTs, keyRange);
                     break;
                 }
 
@@ -214,7 +256,6 @@ public class TiKVRichParallelSourceFunction<T> extends RichParallelSourceFunctio
                         snapshotEventDeserializationSchema.deserialize(pair, outputCollector);
                     }
                 }
-
                 start =
                         RowKey.toRawKey(segment.get(segment.size() - 1).getKey())
                                 .next()

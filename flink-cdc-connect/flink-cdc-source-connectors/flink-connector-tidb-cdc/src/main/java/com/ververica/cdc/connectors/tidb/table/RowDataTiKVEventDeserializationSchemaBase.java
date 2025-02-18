@@ -28,6 +28,8 @@ import org.apache.flink.table.types.logical.RowType;
 import org.apache.flink.util.Collector;
 import org.apache.flink.util.FlinkRuntimeException;
 
+import com.ververica.cdc.common.event.TableId;
+import com.ververica.cdc.connectors.tidb.table.dto.TableInfo;
 import com.ververica.cdc.debezium.utils.TemporalConversions;
 import org.tikv.common.TiConfiguration;
 import org.tikv.common.TiSession;
@@ -39,6 +41,9 @@ import java.io.Serializable;
 import java.math.BigDecimal;
 import java.nio.ByteBuffer;
 import java.sql.Timestamp;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 
 import static org.apache.flink.util.Preconditions.checkNotNull;
 
@@ -56,8 +61,6 @@ public class RowDataTiKVEventDeserializationSchemaBase implements Serializable {
     protected TiTableInfo tableInfo;
 
     private final TiConfiguration tiConf;
-    private final String database;
-    private final String tableName;
 
     /**
      * A wrapped output collector which is used to append metadata columns after physical columns.
@@ -68,25 +71,55 @@ public class RowDataTiKVEventDeserializationSchemaBase implements Serializable {
      * Runtime converter that converts Tikv {@link Kvrpcpb.KvPair}s into {@link RowData} consisted
      * of physical column values.
      */
-    protected final TiKVDeserializationRuntimeConverter physicalConverter;
+    protected TiKVDeserializationRuntimeConverter physicalConverter = null;
+
+    protected final Map<String, TiKVDeserializationRuntimeConverter> physicalConverterMap =
+            new HashMap<>();
 
     public RowDataTiKVEventDeserializationSchemaBase(
             TiConfiguration tiConf,
-            String database,
-            String tableName,
             TiKVMetadataConverter[] metadataConverters,
+            Map<String, RowType> physicalDataTypes,
             RowType physicalDataType) {
         this.tiConf = checkNotNull(tiConf);
-        this.database = checkNotNull(database);
-        this.tableName = checkNotNull(tableName);
         this.hasMetadata = checkNotNull(metadataConverters).length > 0;
         this.appendMetadataCollector = new TiKVAppendMetadataCollector(metadataConverters);
-        this.physicalConverter = createConverter(checkNotNull(physicalDataType));
+        getPhysicalConverterMap(physicalDataTypes);
+        if (physicalDataType != null) {
+            this.physicalConverter = createConverter(checkNotNull(physicalDataType));
+        }
+    }
+
+    protected void getPhysicalConverterMap(Map<String, RowType> physicalDataTypes) {
+        for (String tableName : physicalDataTypes.keySet()) {
+            physicalConverterMap.put(
+                    tableName, createConverter(checkNotNull(physicalDataTypes.get(tableName))));
+        }
     }
 
     protected TiTableInfo fetchTableInfo() {
         try (final TiSession session = TiSession.create(tiConf)) {
-            return session.getCatalog().getTable(database, tableName);
+            return session.getCatalog().getTable("database", "tableName");
+        } catch (final Exception e) {
+            throw new FlinkRuntimeException(e);
+        }
+    }
+
+    protected Map<Long, TableInfo> fetchTableIdMap(List<TableId> tables) {
+
+        try (final TiSession session = TiSession.create(tiConf)) {
+            Map<Long, TableInfo> tableIdMap = new HashMap<>();
+            for (TableId tableId : tables) {
+                String db = tableId.getSchemaName();
+                String table = tableId.getTableName();
+                TiTableInfo tableInfo = session.getCatalog().getTable(db, table);
+                TableInfo tableDto = new TableInfo();
+                tableDto.setTableId(tableInfo.getId());
+                tableDto.setTableName(db + "." + table);
+                tableDto.setTableInfo(tableInfo);
+                tableIdMap.put(tableInfo.getId(), tableDto);
+            }
+            return tableIdMap;
         } catch (final Exception e) {
             throw new FlinkRuntimeException(e);
         }

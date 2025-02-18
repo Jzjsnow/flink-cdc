@@ -28,6 +28,7 @@ import org.tikv.common.region.TiRegion;
 import org.tikv.common.util.RangeSplitter;
 import org.tikv.common.util.RangeSplitter.RegionTask;
 import org.tikv.kvproto.Cdcpb.Event.Row;
+import org.tikv.kvproto.Coprocessor;
 import org.tikv.kvproto.Coprocessor.KeyRange;
 import org.tikv.kvproto.Kvrpcpb;
 import org.tikv.shade.io.grpc.ManagedChannel;
@@ -36,6 +37,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Iterator;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.ConcurrentHashMap;
@@ -50,7 +52,6 @@ public class CDCClient implements AutoCloseable {
     private static final Logger LOGGER = LoggerFactory.getLogger(CDCClient.class);
 
     private final TiSession session;
-    private final KeyRange keyRange;
     private final CDCConfig config;
 
     private final BlockingQueue<CDCEvent> eventsBuffer;
@@ -63,6 +64,10 @@ public class CDCClient implements AutoCloseable {
 
     private Consumer<CDCEvent> eventConsumer;
 
+    private Map<Long, Coprocessor.KeyRange> keyRangeMap;
+
+    private List<KeyRange> keyRanges;
+
     public CDCClient(final TiSession session, final KeyRange keyRange) {
         this(session, keyRange, new CDCConfig());
     }
@@ -72,7 +77,6 @@ public class CDCClient implements AutoCloseable {
                 session.getConf().getIsolationLevel().equals(Kvrpcpb.IsolationLevel.SI),
                 "Unsupported Isolation Level"); // only support SI for now
         this.session = session;
-        this.keyRange = keyRange;
         this.config = config;
         eventsBuffer = new LinkedBlockingQueue<>(config.getEventBufferSize());
         // fix: use queue.put() instead of queue.offer(), otherwise will lose event
@@ -93,9 +97,21 @@ public class CDCClient implements AutoCloseable {
                 };
     }
 
-    public synchronized void start(final long startTs) {
+    public synchronized void start(Map<Long, Coprocessor.KeyRange> keyRangeMap) {
+        this.keyRangeMap = keyRangeMap;
         Preconditions.checkState(!started, "Client is already started");
-        applyKeyRange(keyRange, startTs);
+        for (Long key : keyRangeMap.keySet()) {
+            applyKeyRange(keyRangeMap.get(key), key);
+        }
+        started = true;
+    }
+
+    public synchronized void startSkipSnapshot(long resolvedTs, List<KeyRange> keyRanges) {
+        this.keyRanges = keyRanges;
+        Preconditions.checkState(!started, "Client is already started");
+        for (KeyRange keyRange : keyRanges) {
+            applyKeyRange(keyRange, resolvedTs);
+        }
         started = true;
     }
 
@@ -129,6 +145,7 @@ public class CDCClient implements AutoCloseable {
     }
 
     private synchronized void applyKeyRange(final KeyRange keyRange, final long timestamp) {
+        regionClients.clear();
         final RangeSplitter splitter = RangeSplitter.newSplitter(session.getRegionManager());
 
         final Iterator<TiRegion> newRegionsIterator =
@@ -173,16 +190,16 @@ public class CDCClient implements AutoCloseable {
             regionsToRemove.add(oldRegionClient.getRegion().getId());
             oldRegionClient = oldRegionsIterator.hasNext() ? oldRegionsIterator.next() : null;
         }
-
         removeRegions(regionsToRemove);
-        addRegions(regionsToAdd, timestamp);
+        addRegions(regionsToAdd, timestamp, keyRange);
         LOGGER.info("keyRange applied");
     }
 
-    private synchronized void addRegions(final Iterable<TiRegion> regions, final long timestamp) {
+    private synchronized void addRegions(
+            final Iterable<TiRegion> regions, final long timestamp, KeyRange keyRange) {
         LOGGER.info("add regions: {}, timestamp: {}", regions, timestamp);
         for (final TiRegion region : regions) {
-            if (overlapWithRegion(region)) {
+            if (overlapWithRegion(region, keyRange)) {
                 final String address =
                         session.getRegionManager()
                                 .getStoreById(region.getLeader().getStoreId())
@@ -225,7 +242,7 @@ public class CDCClient implements AutoCloseable {
         }
     }
 
-    private boolean overlapWithRegion(final TiRegion region) {
+    private boolean overlapWithRegion(final TiRegion region, KeyRange keyRange) {
         final Range<Key> regionRange =
                 Range.closedOpen(
                         Key.toRawKey(region.getStartKey()), Key.toRawKey(region.getEndKey()));
@@ -249,6 +266,14 @@ public class CDCClient implements AutoCloseable {
                 .onRequestFail(region); // invalidate cache for corresponding region
 
         removeRegions(Arrays.asList(regionId));
-        applyKeyRange(keyRange, resolvedTs); // reapply the whole keyRange
+        if (keyRangeMap.size() != 0) { // reapply the whole keyRange
+            for (long key : keyRangeMap.keySet()) {
+                applyKeyRange(keyRangeMap.get(key), key);
+            }
+        } else {
+            for (KeyRange keyRange : keyRanges) {
+                applyKeyRange(keyRange, resolvedTs);
+            }
+        }
     }
 }

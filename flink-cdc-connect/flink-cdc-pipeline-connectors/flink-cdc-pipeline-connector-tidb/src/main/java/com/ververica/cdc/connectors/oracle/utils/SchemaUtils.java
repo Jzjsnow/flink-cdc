@@ -20,7 +20,9 @@ import org.apache.flink.table.api.DataTypes;
 import org.apache.flink.table.catalog.ResolvedSchema;
 import org.apache.flink.table.catalog.UniqueConstraint;
 
+import com.ververica.cdc.common.event.TableId;
 import com.ververica.cdc.common.schema.Schema;
+import com.ververica.cdc.common.schema.Selectors;
 import com.ververica.cdc.common.types.DataType;
 import com.ververica.cdc.connectors.oracle.dto.JdbcInfo;
 import com.ververica.cdc.connectors.oracle.dto.MySqlFieldDefinition;
@@ -28,12 +30,13 @@ import com.ververica.cdc.connectors.oracle.dto.MySqlTableDefinition;
 import io.debezium.connector.mysql.antlr.MySqlAntlrDdlParser;
 import io.debezium.relational.Column;
 import io.debezium.relational.Table;
-import io.debezium.relational.TableId;
 import io.debezium.relational.Tables;
 import io.debezium.text.ParsingException;
 import org.apache.commons.lang3.StringUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+import javax.annotation.Nullable;
 
 import java.sql.Connection;
 import java.sql.DriverManager;
@@ -41,6 +44,7 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
 
@@ -274,7 +278,8 @@ public class SchemaUtils {
         }
     }
 
-    public static Schema getSchema(TableId tableId, JdbcInfo jdbcInfo) {
+    public static Schema getSchema(String tableIdStr, JdbcInfo jdbcInfo) {
+        TableId tableId = TableId.parse(tableIdStr);
         Connection connection = openJdbcConnection(jdbcInfo);
         String ddlStatement = showCreateTable(connection, tableId);
         try {
@@ -331,7 +336,8 @@ public class SchemaUtils {
                     jdbc.createStatement()
                             .executeQuery(
                                     String.format(
-                                            "DESC `%s`.`%s`", tableId.catalog(), tableId.table()));
+                                            "DESC `%s`.`%s`",
+                                            tableId.getSchemaName(), tableId.getTableName()));
 
             while (rs.next()) {
                 MySqlFieldDefinition meta = new MySqlFieldDefinition();
@@ -347,7 +353,11 @@ public class SchemaUtils {
                 }
                 fieldMetas.add(meta);
             }
-            return new MySqlTableDefinition(tableId, fieldMetas, primaryKeys).toDdl();
+            return new MySqlTableDefinition(
+                            io.debezium.relational.TableId.parse(tableId.toString()),
+                            fieldMetas,
+                            primaryKeys)
+                    .toDdl();
 
         } catch (SQLException e) {
             throw new RuntimeException(String.format("Failed to describe table %s", tableId), e);
@@ -356,10 +366,10 @@ public class SchemaUtils {
 
     public static synchronized Table parseDdl(String ddlStatement, TableId tableId) {
         MySqlAntlrDdlParser mySqlAntlrDdlParser = getParser();
-        mySqlAntlrDdlParser.setCurrentDatabase(tableId.catalog());
+        mySqlAntlrDdlParser.setCurrentDatabase(tableId.getSchemaName());
         Tables tables = new Tables();
         mySqlAntlrDdlParser.parse(ddlStatement, tables);
-        return tables.forTable(tableId);
+        return tables.forTable(io.debezium.relational.TableId.parse(tableId.toString()));
     }
 
     public static synchronized MySqlAntlrDdlParser getParser() {
@@ -371,7 +381,9 @@ public class SchemaUtils {
 
     public static String showCreateTable(Connection jdbc, TableId tableId) {
         final String showCreateTableQuery =
-                String.format("SHOW CREATE TABLE `%s`.`%s`", tableId.catalog(), tableId.table());
+                String.format(
+                        "SHOW CREATE TABLE `%s`.`%s`",
+                        tableId.getSchemaName(), tableId.getTableName());
         ResultSet rs = null;
         Statement st = null;
         try {
@@ -537,5 +549,113 @@ public class SchemaUtils {
                 throw new UnsupportedOperationException(
                         String.format("MySQL type '%s' is not supported yet.", typeName));
         }
+    }
+
+    public static List<com.ververica.cdc.common.event.TableId> listTables(
+            JdbcInfo jdbcInfo, @Nullable String dbName) {
+        try {
+            List<String> databases =
+                    dbName != null ? Collections.singletonList(dbName) : listDatabases(jdbcInfo);
+
+            List<com.ververica.cdc.common.event.TableId> tableIds = new ArrayList<>();
+            for (String database : databases) {
+                tableIds.addAll(listTablesOfDatabase(jdbcInfo, database));
+            }
+            return tableIds;
+        } catch (SQLException e) {
+            throw new RuntimeException("Error to list databases: " + e.getMessage(), e);
+        }
+    }
+
+    public static List<com.ververica.cdc.common.event.TableId> listTablesOfDatabase(
+            JdbcInfo jdbcInfo, String dbName) throws SQLException {
+        // ----------------
+        // READ TABLE NAMES
+        // ----------------
+        // Get the list of table IDs for each database. We can't use a prepared statement with
+        // tidb, so we have to build the SQL statement each time. Although in other cases this
+        // might lead to SQL injection, in our case we are reading the database names from the
+        // database and not taking them from the user ...
+        LOG.info("Read list of available tables in {}", dbName);
+        final List<com.ververica.cdc.common.event.TableId> tableIds = new ArrayList<>();
+        Connection jdbc = SchemaUtils.openJdbcConnection(jdbcInfo);
+        ResultSet rs = null;
+        Statement st = null;
+        try {
+            st = jdbc.createStatement();
+            rs =
+                    jdbc.createStatement()
+                            .executeQuery(
+                                    "SELECT table_schema,table_name FROM information_schema.tables WHERE table_schema = '"
+                                            + dbName
+                                            + "' ;");
+            while (rs.next()) {
+                tableIds.add(
+                        com.ververica.cdc.common.event.TableId.tableId(
+                                rs.getString(1), rs.getString(2)));
+            }
+            return tableIds;
+        } catch (SQLException e) {
+            throw new RuntimeException("Failed to list tables", e);
+        } finally {
+            try {
+                rs.close();
+                st.close();
+                jdbc.close();
+            } catch (SQLException e) {
+                throw new RuntimeException(e);
+            }
+        }
+    }
+
+    public static List<String> listDatabases(JdbcInfo jdbcInfo) throws SQLException {
+        // -------------------
+        // READ DATABASE NAMES
+        // -------------------
+        // Get the list of databases ...
+        LOG.info("Read list of available databases");
+        final List<String> databaseNames = new ArrayList<>();
+        Connection jdbc = SchemaUtils.openJdbcConnection(jdbcInfo);
+
+        ResultSet rs = null;
+        Statement st = null;
+        try {
+            st = jdbc.createStatement();
+            rs = jdbc.createStatement().executeQuery("show databases");
+            while (rs.next()) {
+                databaseNames.add(rs.getString(1));
+            }
+            LOG.info(" list of available databases are: {}", databaseNames);
+            return databaseNames;
+        } catch (SQLException e) {
+            throw new RuntimeException("Failed to show databases", e);
+        } finally {
+            try {
+                rs.close();
+                st.close();
+                jdbc.close();
+            } catch (SQLException e) {
+                throw new RuntimeException(e);
+            }
+        }
+    }
+
+    public static List<TableId> getCapturedTableIds(List<String> tables, JdbcInfo jdbcInfo) {
+        Selectors selectors =
+                new Selectors.SelectorsBuilder().includeTables(String.join(", ", tables)).build();
+        String[] capturedTables = getTableList(jdbcInfo, selectors);
+        List<TableId> capturedTableIds = new ArrayList<>();
+        for (String table : capturedTables) {
+            TableId capturedTableId = TableId.parse(table);
+            capturedTableIds.add(capturedTableId);
+        }
+        return capturedTableIds;
+    }
+
+    private static String[] getTableList(JdbcInfo jdbcInfo, Selectors selectors) {
+        return SchemaUtils.listTables(jdbcInfo, null).stream()
+                .filter(selectors::isMatch)
+                .map(com.ververica.cdc.common.event.TableId::toString)
+                .toArray(String[]::new);
     }
 }

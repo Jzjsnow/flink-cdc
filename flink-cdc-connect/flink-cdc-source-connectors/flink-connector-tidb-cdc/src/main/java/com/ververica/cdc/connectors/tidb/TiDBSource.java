@@ -18,8 +18,12 @@ package com.ververica.cdc.connectors.tidb;
 
 import org.apache.flink.streaming.api.functions.source.RichParallelSourceFunction;
 
+import com.ververica.cdc.common.event.TableId;
 import com.ververica.cdc.connectors.tidb.table.StartupOptions;
 import org.tikv.common.TiConfiguration;
+
+import java.util.ArrayList;
+import java.util.List;
 
 /** A builder to build a SourceFunction which can read snapshot and continue to read CDC events. */
 public class TiDBSource {
@@ -30,23 +34,23 @@ public class TiDBSource {
 
     /** Builder class of {@link TiDBSource}. */
     public static class Builder<T> {
-        private String database;
-        private String tableName;
         private StartupOptions startupOptions = StartupOptions.initial();
         private TiConfiguration tiConf;
+
+        private List<TableId> tables;
+        private int snapshotWorkerNums;
 
         private TiKVSnapshotEventDeserializationSchema<T> snapshotEventDeserializationSchema;
         private TiKVChangeEventDeserializationSchema<T> changeEventDeserializationSchema;
 
-        /** Database name to be monitored. */
-        public Builder<T> database(String database) {
-            this.database = database;
+        /** TableName name to be monitored. */
+        public Builder<T> tables(List<TableId> tables) {
+            this.tables = tables;
             return this;
         }
 
-        /** TableName name to be monitored. */
-        public Builder<T> tableName(String tableName) {
-            this.tableName = tableName;
+        public Builder<T> snapshotWorkerNums(int snapshotWorkerNums) {
+            this.snapshotWorkerNums = snapshotWorkerNums;
             return this;
         }
 
@@ -77,14 +81,17 @@ public class TiDBSource {
         }
 
         public RichParallelSourceFunction<T> build() {
-
+            List<String> tableList = new ArrayList<>();
+            for (TableId tableId : tables) {
+                tableList.add(tableId.getSchemaName() + "." + tableId.getTableName());
+            }
             return new TiKVRichParallelSourceFunction<>(
                     snapshotEventDeserializationSchema,
                     changeEventDeserializationSchema,
                     tiConf,
                     startupOptions.startupMode,
-                    database,
-                    tableName);
+                    tableList,
+                    snapshotWorkerNums);
         }
     }
 }

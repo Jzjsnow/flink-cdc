@@ -220,12 +220,14 @@ public class RegionCDCClient implements AutoCloseable, StreamObserver<ChangeData
             if (running.get()) {
                 // fix: miss to process error event
                 onErrorEventHandle(event);
-                event.getEventsList().stream()
-                        .flatMap(ev -> ev.getEntries().getEntriesList().stream())
-                        .filter(row -> ALLOWED_LOGTYPE.contains(row.getType()))
-                        .filter(this.rowFilter)
-                        .map(row -> CDCEvent.rowEvent(region.getId(), row))
-                        .forEach(this::submitEvent);
+                List<CDCEvent> cdcEvents =
+                        event.getEventsList().stream()
+                                .flatMap(ev -> ev.getEntries().getEntriesList().stream())
+                                .filter(row -> ALLOWED_LOGTYPE.contains(row.getType()))
+                                .filter(this.rowFilter)
+                                .map(row -> CDCEvent.rowEvent(region.getId(), row))
+                                .collect(Collectors.toList());
+                cdcEvents.forEach(this::submitEvent);
 
                 if (event.hasResolvedTs()) {
                     final ResolvedTs resolvedTs = event.getResolvedTs();

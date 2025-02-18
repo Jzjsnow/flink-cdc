@@ -28,6 +28,7 @@ import org.apache.flink.table.types.DataType;
 import org.apache.flink.table.types.logical.RowType;
 import org.apache.flink.types.RowKind;
 
+import com.ververica.cdc.common.event.TableId;
 import com.ververica.cdc.connectors.tidb.TDBSourceOptions;
 import com.ververica.cdc.connectors.tidb.TiDBSource;
 import org.tikv.common.TiConfiguration;
@@ -97,7 +98,6 @@ public class TiDBTableSource implements ScanTableSource, SupportsReadingMetadata
                 (RowType) physicalSchema.toPhysicalRowDataType().getLogicalType();
         TypeInformation<RowData> typeInfo = scanContext.createTypeInformation(producedDataType);
         TiKVMetadataConverter[] metadataConverters = getMetadataConverters();
-
         RowDataTiKVSnapshotEventDeserializationSchema snapshotEventDeserializationSchema =
                 new RowDataTiKVSnapshotEventDeserializationSchema(
                         tiConf,
@@ -115,11 +115,10 @@ public class TiDBTableSource implements ScanTableSource, SupportsReadingMetadata
                         typeInfo,
                         metadataConverters,
                         physicalDataType);
-
+        List<TableId> tables = Collections.singletonList(TableId.tableId(database, tableName));
         TiDBSource.Builder<RowData> builder =
                 TiDBSource.<RowData>builder()
-                        .database(database)
-                        .tableName(tableName)
+                        .tables(tables)
                         .startupOptions(startupOptions)
                         .tiConf(tiConf)
                         .snapshotEventDeserializer(snapshotEventDeserializationSchema)

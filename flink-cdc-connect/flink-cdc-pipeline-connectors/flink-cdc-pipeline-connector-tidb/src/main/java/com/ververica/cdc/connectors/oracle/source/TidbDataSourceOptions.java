@@ -72,6 +72,16 @@ public class TidbDataSourceOptions {
                                     + "If there is a need to use a dot (.) in a regular expression to match any character, "
                                     + "it is necessary to escape the dot with a backslash."
                                     + "eg. db0.\\.*, db1.user_table_[0-9]+, db[1-2].[app|web]_order_\\.*");
+    public static final ConfigOption<String> TABLES =
+            ConfigOptions.key("tables")
+                    .stringType()
+                    .noDefaultValue()
+                    .withDescription(
+                            "Table names of the tidb tables to monitor. Regular expressions are supported. "
+                                    + "It is important to note that the dot (.) is treated as a delimiter for database and table names. "
+                                    + "If there is a need to use a dot (.) in a regular expression to match any character, "
+                                    + "it is necessary to escape the dot with a backslash."
+                                    + "eg. db0.\\.*, db1.user_table_[0-9]+, db[1-2].[app|web]_order_\\.*");
 
     public static final ConfigOption<String> SERVER_TIME_ZONE =
             ConfigOptions.key("server-time-zone")
@@ -109,4 +119,10 @@ public class TidbDataSourceOptions {
                             "Optional startup mode for oracle CDC consumer, valid enumerations are "
                                     + "\"initial\", \"earliest-offset\", \"latest-offset\", \"timestamp\"\n"
                                     + "or \"specific-offset\"");
+
+    public static final ConfigOption<Integer> SNAPSHOT_WORKER_NUMS =
+            ConfigOptions.key("snapshot.worker.nums")
+                    .intType()
+                    .defaultValue(5)
+                    .withDescription("The parallelism of snapshot thread pool.");
 }
