@@ -36,7 +36,6 @@ import org.apache.doris.flink.sink.writer.serializer.DorisRecordSerializer;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
-import java.text.SimpleDateFormat;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.util.HashMap;
@@ -51,7 +50,8 @@ public class DorisEventSerializer implements DorisRecordSerializer<Event> {
     private Map<TableId, Schema> schemaMaps = new HashMap<>();
 
     /** Format DATE type data. */
-    public static final SimpleDateFormat DATE_FORMATTER = new SimpleDateFormat("yyyy-MM-dd");
+    public static final DateTimeFormatter DATE_FORMATTER =
+            DateTimeFormatter.ofPattern("yyyy-MM-dd");
 
     /** Format timestamp-related type data. */
     public static final DateTimeFormatter DATE_TIME_FORMATTER =
