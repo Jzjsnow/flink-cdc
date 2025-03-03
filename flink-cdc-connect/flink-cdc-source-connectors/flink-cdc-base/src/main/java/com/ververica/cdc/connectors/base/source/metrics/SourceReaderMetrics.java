@@ -18,6 +18,7 @@ package com.ververica.cdc.connectors.base.source.metrics;
 
 import org.apache.flink.metrics.Counter;
 import org.apache.flink.metrics.Gauge;
+import org.apache.flink.metrics.groups.OperatorMetricGroup;
 import org.apache.flink.metrics.groups.SourceReaderMetricGroup;
 import org.apache.flink.runtime.metrics.MetricNames;
 
@@ -27,11 +28,13 @@ import com.ververica.cdc.connectors.base.source.reader.IncrementalSourceReader;
 public class SourceReaderMetrics {
 
     private final SourceReaderMetricGroup metricGroup;
+    private final OperatorMetricGroup operatorMetricGroup;
     private String dataSourceType;
     private static final String METRIC_NAME_FORMAT = "%s_%s";
     private static final String FLINK_CDC_SOURCE_POSTGRES = "flinkCDC_Source_Postgres";
     private static final String FLINK_CDC_SOURCE_ORACLE = "flinkCDC_Source_Oracle";
     private static final String IS_SNAPSHOT_SPLIT_STATE = "isSnapshotSplitState";
+    private static final String FLINK_CDC_SOURCE_TIDB = "flinkCDC_Source_Tidb";
 
     /**
      * currentFetchEventTimeLag = FetchTime - messageTimestamp, where the FetchTime is the time the
@@ -77,8 +80,16 @@ public class SourceReaderMetrics {
     private volatile long isSnapshotSplitState = 0L;
 
     public SourceReaderMetrics(SourceReaderMetricGroup metricGroup, String dataSourceType) {
+        this.operatorMetricGroup = null;
         this.metricGroup = metricGroup;
         this.numRecordsInErrorsCounter = metricGroup.getNumRecordsInErrorsCounter();
+        this.dataSourceType = dataSourceType;
+    }
+
+    public SourceReaderMetrics(OperatorMetricGroup operatorMetricGroup, String dataSourceType) {
+        this.operatorMetricGroup = operatorMetricGroup;
+        this.numRecordsInErrorsCounter = null;
+        this.metricGroup = null;
         this.dataSourceType = dataSourceType;
     }
 
@@ -155,6 +166,39 @@ public class SourceReaderMetrics {
             metricGroup.gauge(
                     String.format(
                             METRIC_NAME_FORMAT, FLINK_CDC_SOURCE_POSTGRES, IS_SNAPSHOT_SPLIT_STATE),
+                    (Gauge<Long>) this::getIsSnapshotSplitState);
+        } else if ("Tidb".equals(dataSourceType)) {
+            operatorMetricGroup.gauge(
+                    String.format(
+                            METRIC_NAME_FORMAT,
+                            FLINK_CDC_SOURCE_TIDB,
+                            MetricNames.CURRENT_FETCH_EVENT_TIME_LAG),
+                    (Gauge<Long>) this::getFetchDelay);
+            operatorMetricGroup.gauge(
+                    String.format(
+                            METRIC_NAME_FORMAT,
+                            FLINK_CDC_SOURCE_TIDB,
+                            MetricNames.IO_NUM_RECORDS_IN),
+                    (Gauge<Double>) this::getNumRecordsIn);
+            operatorMetricGroup.gauge(
+                    String.format(
+                            METRIC_NAME_FORMAT, FLINK_CDC_SOURCE_TIDB, MetricNames.IO_NUM_BYTES_IN),
+                    (Gauge<Double>) this::getNumBytesIn);
+            operatorMetricGroup.gauge(
+                    String.format(
+                            METRIC_NAME_FORMAT,
+                            FLINK_CDC_SOURCE_TIDB,
+                            MetricNames.IO_NUM_RECORDS_IN_RATE),
+                    (Gauge<Double>) this::getNumRecordsInRate);
+            operatorMetricGroup.gauge(
+                    String.format(
+                            METRIC_NAME_FORMAT,
+                            FLINK_CDC_SOURCE_TIDB,
+                            MetricNames.IO_NUM_BYTES_IN_RATE),
+                    (Gauge<Double>) this::getNumBytesInRate);
+            operatorMetricGroup.gauge(
+                    String.format(
+                            METRIC_NAME_FORMAT, FLINK_CDC_SOURCE_TIDB, IS_SNAPSHOT_SPLIT_STATE),
                     (Gauge<Long>) this::getIsSnapshotSplitState);
         }
     }

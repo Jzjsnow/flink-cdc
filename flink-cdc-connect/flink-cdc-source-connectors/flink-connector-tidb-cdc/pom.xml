@@ -148,7 +148,11 @@ under the License.
             <version>1.8.0</version>
             <scope>test</scope>
         </dependency>
-
+        <dependency>
+            <groupId>com.ververica</groupId>
+            <artifactId>flink-cdc-base</artifactId>
+            <version>${project.version}</version>
+        </dependency>
     </dependencies>
 
 

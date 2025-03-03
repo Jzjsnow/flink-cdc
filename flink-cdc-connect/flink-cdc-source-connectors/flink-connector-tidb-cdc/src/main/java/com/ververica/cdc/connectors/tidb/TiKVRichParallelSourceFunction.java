@@ -24,6 +24,7 @@ import org.apache.flink.api.common.typeutils.base.LongSerializer;
 import org.apache.flink.api.common.typeutils.base.MapSerializer;
 import org.apache.flink.api.java.typeutils.ResultTypeQueryable;
 import org.apache.flink.configuration.Configuration;
+import org.apache.flink.metrics.groups.OperatorMetricGroup;
 import org.apache.flink.runtime.state.FunctionInitializationContext;
 import org.apache.flink.runtime.state.FunctionSnapshotContext;
 import org.apache.flink.streaming.api.checkpoint.CheckpointedFunction;
@@ -31,6 +32,7 @@ import org.apache.flink.streaming.api.functions.source.RichParallelSourceFunctio
 import org.apache.flink.util.Collector;
 import org.apache.flink.util.FlinkRuntimeException;
 
+import com.ververica.cdc.connectors.base.source.metrics.SourceReaderMetrics;
 import com.ververica.cdc.connectors.tidb.table.StartupMode;
 import com.ververica.cdc.connectors.tidb.table.utils.TableKeyRangeUtils;
 import com.ververica.cdc.runtime.serializer.StringSerializer;
@@ -48,6 +50,7 @@ import org.tikv.shade.com.google.common.util.concurrent.ThreadFactoryBuilder;
 import org.tikv.shade.com.google.protobuf.ByteString;
 import org.tikv.txn.KVClient;
 
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -61,6 +64,8 @@ import java.util.concurrent.Future;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.TimeUnit;
+
+import static org.apache.commons.math3.util.Precision.round;
 
 /**
  * The source implementation for TiKV that read snapshot events first and then read the change
@@ -114,6 +119,12 @@ public class TiKVRichParallelSourceFunction<T> extends RichParallelSourceFunctio
 
     private Map<String, Long> tableTsMap = new HashMap<>();
 
+    private SourceReaderMetrics sourceReaderMetrics;
+
+    private double counter = 0;
+    private double size = 0.0;
+    private Long firstEventTimestamp = null;
+
     public TiKVRichParallelSourceFunction(
             TiKVSnapshotEventDeserializationSchema<T> snapshotEventDeserializationSchema,
             TiKVChangeEventDeserializationSchema<T> changeEventDeserializationSchema,
@@ -131,6 +142,13 @@ public class TiKVRichParallelSourceFunction<T> extends RichParallelSourceFunctio
 
     @Override
     public void open(final Configuration config) throws Exception {
+
+        OperatorMetricGroup metrics = getRuntimeContext().getMetricGroup();
+
+        sourceReaderMetrics = new SourceReaderMetrics(metrics, "Tidb");
+
+        sourceReaderMetrics.registerMetrics();
+
         keyRanges = new ArrayList<>();
         keyRangeMap = new HashMap<>();
         super.open(config);
@@ -238,6 +256,14 @@ public class TiKVRichParallelSourceFunction<T> extends RichParallelSourceFunctio
             // Don't handle index key for now
             return;
         }
+        // timestamp for the first record arrived
+        if (firstEventTimestamp == null) {
+            firstEventTimestamp = System.currentTimeMillis();
+        }
+        counter++;
+        size += getRecordBytes(row);
+        reportMetrics(row, null);
+        reportMetrics(1L);
         LOG.debug("binlog record, type: {}, data: {}", row.getType(), row);
         switch (row.getType()) {
             case COMMITTED:
@@ -274,6 +300,13 @@ public class TiKVRichParallelSourceFunction<T> extends RichParallelSourceFunctio
 
                 for (final Kvrpcpb.KvPair pair : segment) {
                     if (TableKeyRangeUtils.isRecordKey(pair.getKey().toByteArray())) {
+                        counter++;
+                        if (firstEventTimestamp == null) {
+                            firstEventTimestamp = System.currentTimeMillis();
+                        }
+                        size += getSnapShotRecordBytes(pair);
+                        reportMetrics(null, pair);
+                        reportMetrics(0L);
                         snapshotEventDeserializationSchema.deserialize(pair, outputCollector);
                     }
                 }
@@ -463,5 +496,55 @@ public class TiKVRichParallelSourceFunction<T> extends RichParallelSourceFunctio
         public void close() {
             // do nothing
         }
+    }
+
+    protected void reportMetrics(Cdcpb.Event.Row element, Kvrpcpb.KvPair pair) {
+        if (pair == null) {
+            Long messageTimestamp = element.getCommitTs();
+            if (messageTimestamp != null && messageTimestamp > 0L) {
+                // report fetch delay
+                Long fetchTimestamp = System.currentTimeMillis();
+                if (fetchTimestamp != null) {
+                    sourceReaderMetrics.recordFetchDelay(
+                            fetchTimestamp - messageTimestamp / 2 ^ 18);
+                }
+            }
+        } else {
+            sourceReaderMetrics.recordFetchDelay(0L);
+        }
+
+        // report tidb num of records in
+        sourceReaderMetrics.recordNumRecordsIn(counter);
+        // report tidb num of bytes in
+        sourceReaderMetrics.recordNumBytesIn(size);
+        long currentTimestamp = System.currentTimeMillis();
+        if (firstEventTimestamp == null) {
+            sourceReaderMetrics.recordNumRecordsInRate(0.0);
+            sourceReaderMetrics.recordNumBytesInRate(0.0);
+        } else {
+            double rateOfRecords = counter / (currentTimestamp - firstEventTimestamp) * 1000;
+            double rateOfBytes = size / (currentTimestamp - firstEventTimestamp) * 1000;
+            rateOfRecords = round(rateOfRecords, 2);
+            rateOfBytes = round(rateOfBytes, 2);
+            // report tidb num of records in rate
+            sourceReaderMetrics.recordNumRecordsInRate(rateOfRecords);
+            // report tidb num of bytes in rate
+            sourceReaderMetrics.recordNumBytesInRate(rateOfBytes);
+        }
+    }
+
+    private void reportMetrics(Long state) {
+        // report the stage of data synchronization : snapshot stage or increment stage
+        sourceReaderMetrics.recordIsSnapshotSplitState(state);
+    }
+
+    private static double getRecordBytes(Cdcpb.Event.Row row) {
+        byte[] bytesOfRecord = row.toString().getBytes(StandardCharsets.UTF_8);
+        return bytesOfRecord.length;
+    }
+
+    private static double getSnapShotRecordBytes(Kvrpcpb.KvPair pair) {
+        byte[] bytesOfRecord = pair.toString().getBytes(StandardCharsets.UTF_8);
+        return bytesOfRecord.length;
     }
 }

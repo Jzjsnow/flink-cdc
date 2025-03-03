@@ -260,9 +260,13 @@ public class RowConvertUtils {
         Object[] fieldsArr = new Object[arity];
         for (int i = 0; i < arity; i++) {
             DataType dataType = schema.getColumn(columnNames[i]).get().getType();
-            Object convertedField =
-                    createNotNullConverter(dataType).convert(rowData.getField(i), null);
-            fieldsArr[i] = convertedField;
+            if (rowData.getField(i) == null) {
+                fieldsArr[i] = null;
+            } else {
+                Object convertedField =
+                        createNotNullConverter(dataType).convert(rowData.getField(i), null);
+                fieldsArr[i] = convertedField;
+            }
         }
         Preconditions.checkState(
                 fields.length == fieldsArr.length, "Column size does not match the data size");
