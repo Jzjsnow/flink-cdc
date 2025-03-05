@@ -16,6 +16,7 @@
 
 package org.tikv.cdc;
 
+import org.apache.flink.api.java.tuple.Tuple2;
 import org.apache.flink.util.Preconditions;
 
 import org.apache.flink.shaded.guava30.com.google.common.collect.ImmutableSet;
@@ -71,6 +72,8 @@ public class RegionCDCClient implements AutoCloseable, StreamObserver<ChangeData
     private final boolean started = false;
 
     private long resolvedTs = 0;
+
+    private Tuple2<KeyRange, Long> resolvedTsMap = new Tuple2<>();
 
     public RegionCDCClient(
             final TiRegion region,
@@ -259,5 +262,11 @@ public class RegionCDCClient implements AutoCloseable, StreamObserver<ChangeData
     private void submitEvent(final CDCEvent event) {
         LOGGER.debug("submit event: {}", event);
         eventConsumer.accept(event);
+    }
+
+    public Tuple2<KeyRange, Long> getResolvedTs() {
+        resolvedTsMap.f0 = keyRange;
+        resolvedTsMap.f1 = resolvedTs;
+        return resolvedTsMap;
     }
 }

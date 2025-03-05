@@ -64,9 +64,11 @@ public class CDCClient implements AutoCloseable {
 
     private Consumer<CDCEvent> eventConsumer;
 
-    private Map<Long, Coprocessor.KeyRange> keyRangeMap;
+    private Map<Coprocessor.KeyRange, Long> keyRangeMap;
 
     private List<KeyRange> keyRanges;
+
+    private List<RegionCDCClient> allRegions = new ArrayList<>();
 
     public CDCClient(final TiSession session, final KeyRange keyRange) {
         this(session, keyRange, new CDCConfig());
@@ -97,11 +99,11 @@ public class CDCClient implements AutoCloseable {
                 };
     }
 
-    public synchronized void start(Map<Long, Coprocessor.KeyRange> keyRangeMap) {
+    public synchronized void start(Map<Coprocessor.KeyRange, Long> keyRangeMap) {
         this.keyRangeMap = keyRangeMap;
         Preconditions.checkState(!started, "Client is already started");
-        for (Long key : keyRangeMap.keySet()) {
-            applyKeyRange(keyRangeMap.get(key), key);
+        for (KeyRange key : keyRangeMap.keySet()) {
+            applyKeyRange(key, keyRangeMap.get(key));
         }
         started = true;
     }
@@ -215,6 +217,7 @@ public class CDCClient implements AutoCloseable {
                     regionToResolvedTs.put(region.getId(), timestamp);
                     resolvedTsSet.add(timestamp);
                     client.start(timestamp);
+                    allRegions.add(client);
                 } catch (final Exception e) {
                     LOGGER.error(
                             "failed to add region(regionId: {}, reason: {})", region.getId(), e);
@@ -267,13 +270,26 @@ public class CDCClient implements AutoCloseable {
 
         removeRegions(Arrays.asList(regionId));
         if (keyRangeMap.size() != 0) { // reapply the whole keyRange
-            for (long key : keyRangeMap.keySet()) {
-                applyKeyRange(keyRangeMap.get(key), key);
+            for (KeyRange key : keyRangeMap.keySet()) {
+                applyKeyRange(key, keyRangeMap.get(key));
             }
         } else {
             for (KeyRange keyRange : keyRanges) {
                 applyKeyRange(keyRange, resolvedTs);
             }
         }
+    }
+
+    public synchronized Map<String, Long> getCheckpointResolvedTs(
+            Map<KeyRange, String> tableKeyRangesMap) {
+        Map<String, Long> tableTsMap = new HashMap<>();
+        allRegions.stream()
+                .forEach(
+                        e -> {
+                            tableTsMap.put(
+                                    tableKeyRangesMap.get(e.getResolvedTs().f0),
+                                    e.getResolvedTs().f1);
+                        });
+        return tableTsMap;
     }
 }

@@ -21,6 +21,7 @@ import org.apache.flink.api.common.state.ListState;
 import org.apache.flink.api.common.state.ListStateDescriptor;
 import org.apache.flink.api.common.typeinfo.TypeInformation;
 import org.apache.flink.api.common.typeutils.base.LongSerializer;
+import org.apache.flink.api.common.typeutils.base.MapSerializer;
 import org.apache.flink.api.java.typeutils.ResultTypeQueryable;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.runtime.state.FunctionInitializationContext;
@@ -32,6 +33,7 @@ import org.apache.flink.util.FlinkRuntimeException;
 
 import com.ververica.cdc.connectors.tidb.table.StartupMode;
 import com.ververica.cdc.connectors.tidb.table.utils.TableKeyRangeUtils;
+import com.ververica.cdc.runtime.serializer.StringSerializer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.tikv.cdc.CDCClient;
@@ -82,7 +84,7 @@ public class TiKVRichParallelSourceFunction<T> extends RichParallelSourceFunctio
 
     private transient Coprocessor.KeyRange keyRange = null;
     private List<Coprocessor.KeyRange> keyRanges = null;
-    private Map<Long, Coprocessor.KeyRange> keyRangeMap = null;
+    private Map<Coprocessor.KeyRange, Long> keyRangeMap = null;
     private transient CDCClient cdcClient = null;
     private transient SourceContext<T> sourceContext = null;
     private transient volatile long resolvedTs = -1L;
@@ -95,7 +97,7 @@ public class TiKVRichParallelSourceFunction<T> extends RichParallelSourceFunctio
     private transient ExecutorService executorService;
 
     /** offset state. */
-    private transient ListState<Long> offsetState;
+    private transient ListState<Map> offsetState;
 
     private static final long CLOSE_TIMEOUT = 30L;
 
@@ -105,6 +107,12 @@ public class TiKVRichParallelSourceFunction<T> extends RichParallelSourceFunctio
     private final List<String> tables;
 
     private int snapshotWorkerNums;
+
+    private FunctionInitializationContext context;
+
+    private Map<Coprocessor.KeyRange, String> tableKeyRangesMap = new HashMap<>();
+
+    private Map<String, Long> tableTsMap = new HashMap<>();
 
     public TiKVRichParallelSourceFunction(
             TiKVSnapshotEventDeserializationSchema<T> snapshotEventDeserializationSchema,
@@ -146,6 +154,7 @@ public class TiKVRichParallelSourceFunction<T> extends RichParallelSourceFunctio
                             tableId,
                             getRuntimeContext().getNumberOfParallelSubtasks(),
                             getRuntimeContext().getIndexOfThisSubtask());
+            tableKeyRangesMap.put(keyRange, capturedTableId);
             keyRanges.add(keyRange);
         }
         cdcClient = new CDCClient(session, keyRange);
@@ -173,8 +182,9 @@ public class TiKVRichParallelSourceFunction<T> extends RichParallelSourceFunctio
     public void run(final SourceContext<T> ctx) throws Exception {
         sourceContext = ctx;
         outputCollector.context = sourceContext;
-
-        if (startupMode == StartupMode.INITIAL) {
+        if (startupMode == StartupMode.INITIAL
+                && cdcClient.getCheckpointResolvedTs(tableKeyRangesMap).isEmpty()) {
+            LOG.info("If it starts from full mode and is not restored from checkpoint.");
             ExecutorService executorService = Executors.newFixedThreadPool(snapshotWorkerNums);
             List<Future<?>> futures = new ArrayList<>();
             for (Coprocessor.KeyRange keyRange : keyRanges) {
@@ -197,15 +207,26 @@ public class TiKVRichParallelSourceFunction<T> extends RichParallelSourceFunctio
                     throw new RuntimeException("snapshot Exception", e);
                 }
             }
-            LOG.info("All tasks completed, main thread continues.");
-        } else {
-            LOG.info("Skip snapshot read");
+            LOG.info("All snapshot tasks completed.");
+        } else if (context == null || !context.isRestored()) {
+            LOG.info("Skip snapshot read,synchronize incremental data only");
             resolvedTs = session.getTimestamp().getVersion();
+        } else if (context.isRestored()) {
+            LOG.info("Recover from checkpoint");
+            for (Coprocessor.KeyRange keyRange : tableKeyRangesMap.keySet()) {
+                long ts = tableTsMap.get(tableKeyRangesMap.get(keyRange));
+                keyRangeMap.put(keyRange, ts);
+                if (ts > resolvedTs) {
+                    resolvedTs = ts;
+                }
+            }
         }
         LOG.info("start read change events");
         if (keyRangeMap.size() == 0) {
+            LOG.info("When skip snapshot read,start to Start reading incremental data");
             cdcClient.startSkipSnapshot(resolvedTs, keyRanges);
         } else {
+            LOG.info("When snapshot read finished,start to Start reading incremental data");
             cdcClient.start(keyRangeMap);
         }
         running = true;
@@ -247,7 +268,7 @@ public class TiKVRichParallelSourceFunction<T> extends RichParallelSourceFunctio
                         scanClient.scan(start, keyRange.getEnd(), startTs);
                 if (segment.isEmpty()) {
                     resolvedTs = startTs;
-                    keyRangeMap.put(resolvedTs, keyRange);
+                    keyRangeMap.put(keyRange, resolvedTs);
                     break;
                 }
 
@@ -334,32 +355,37 @@ public class TiKVRichParallelSourceFunction<T> extends RichParallelSourceFunctio
 
     @Override
     public void snapshotState(final FunctionSnapshotContext context) throws Exception {
+        Map<String, Long> tableTsMap = cdcClient.getCheckpointResolvedTs(tableKeyRangesMap);
         LOG.info(
-                "snapshotState checkpoint: {} at resolvedTs: {}",
+                "snapshotState checkpoint: {} at resolvedTs of tables: {}",
                 context.getCheckpointId(),
-                resolvedTs);
+                tableTsMap);
         flushRows(resolvedTs);
         offsetState.clear();
-        offsetState.add(resolvedTs);
+        offsetState.add(tableTsMap);
     }
 
     @Override
     public void initializeState(final FunctionInitializationContext context) throws Exception {
+        this.context = context;
         LOG.info("initialize checkpoint");
         offsetState =
                 context.getOperatorStateStore()
                         .getListState(
                                 new ListStateDescriptor<>(
-                                        "resolvedTsState", LongSerializer.INSTANCE));
+                                        "resolvedTsState",
+                                        new MapSerializer(
+                                                StringSerializer.INSTANCE,
+                                                LongSerializer.INSTANCE)));
         if (context.isRestored()) {
-            for (final Long offset : offsetState.get()) {
-                resolvedTs = offset;
-                LOG.info("Restore State from resolvedTs: {}", resolvedTs);
+            for (final Map<String, Long> offset : offsetState.get()) {
+                this.tableTsMap = offset;
+                LOG.info("Restore State from resolvedTs of tables: {}", tableTsMap);
                 return;
             }
         } else {
             resolvedTs = 0;
-            LOG.info("Initialize State from resolvedTs: {}", resolvedTs);
+            LOG.info("Initialize State from resolvedTs of tables: {}: {}", resolvedTs);
         }
     }
 
