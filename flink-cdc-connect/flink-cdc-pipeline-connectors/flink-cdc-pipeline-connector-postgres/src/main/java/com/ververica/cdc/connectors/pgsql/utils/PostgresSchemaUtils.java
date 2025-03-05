@@ -29,6 +29,7 @@ import com.ververica.cdc.common.types.DecimalType;
 import com.ververica.cdc.common.types.DoubleType;
 import com.ververica.cdc.common.types.FloatType;
 import com.ververica.cdc.common.types.IntType;
+import com.ververica.cdc.common.types.SmallIntType;
 import com.ververica.cdc.common.types.TimestampType;
 import com.ververica.cdc.common.types.VarCharType;
 import com.ververica.cdc.common.types.ZonedTimestampType;
@@ -449,8 +450,10 @@ public class PostgresSchemaUtils {
                                 : DataTypes.TIME();
                 break;
             case "int4":
-            case "int2":
                 dataType = new IntType();
+                break;
+            case "int2":
+                dataType = new SmallIntType();
                 break;
             default:
                 throw new RuntimeException(
