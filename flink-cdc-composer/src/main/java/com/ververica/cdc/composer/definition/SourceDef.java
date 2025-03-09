@@ -16,6 +16,8 @@
 
 package com.ververica.cdc.composer.definition;
 
+import com.ververica.cdc.common.configuration.ConfigOption;
+import com.ververica.cdc.common.configuration.ConfigOptions;
 import com.ververica.cdc.common.configuration.Configuration;
 
 import javax.annotation.Nullable;
@@ -40,6 +42,12 @@ public class SourceDef {
     @Nullable private final String name;
     private final Configuration config;
     public static final String PASSWORD = "password";
+    public static final ConfigOption<String> METADATA_OP_TS_NEWLY_ADDED_COLUMN =
+            ConfigOptions.key("metadata.op_ts.newly-added-column")
+                    .stringType()
+                    .defaultValue("op_ts")
+                    .withDescription(
+                            "Name of the newly created column in the pipeline to store the op_ts metadata when op_ts is set to be passed downstream in the source definition (metadata.list: op_ts). Defaults to op_ts.");
 
     public SourceDef(String type, @Nullable String name, Configuration config) {
         this.type = type;

@@ -16,6 +16,8 @@
 
 package com.ververica.cdc.connectors.mysql.source;
 
+import org.apache.flink.table.data.TimestampData;
+
 import com.esri.core.geometry.ogc.OGCGeometry;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -24,6 +26,7 @@ import com.ververica.cdc.common.data.binary.BinaryStringData;
 import com.ververica.cdc.common.event.SchemaChangeEvent;
 import com.ververica.cdc.common.event.TableId;
 import com.ververica.cdc.connectors.mysql.source.parser.CustomMySqlAntlrDdlParser;
+import com.ververica.cdc.connectors.mysql.table.MySqlReadableMetadata;
 import com.ververica.cdc.debezium.event.DebeziumEventDeserializationSchema;
 import com.ververica.cdc.debezium.table.DebeziumChangelogMode;
 import io.debezium.data.Envelope;
@@ -63,12 +66,7 @@ public class MySqlEventDeserializer extends DebeziumEventDeserializationSchema {
     private String hostname;
     private String port;
     private boolean isAddMeta;
-
-    public MySqlEventDeserializer(
-            DebeziumChangelogMode changelogMode, boolean includeSchemaChanges) {
-        super(new MySqlSchemaDataTypeInference(), changelogMode);
-        this.includeSchemaChanges = includeSchemaChanges;
-    }
+    private List<MySqlReadableMetadata> readableMetadataList;
 
     public MySqlEventDeserializer(
             DebeziumChangelogMode changelogMode,
@@ -76,12 +74,14 @@ public class MySqlEventDeserializer extends DebeziumEventDeserializationSchema {
             String sourceTimeZone,
             String hostname,
             String port,
-            boolean isAddMeta) {
+            boolean isAddMeta,
+            List<MySqlReadableMetadata> readableMetadataList) {
         super(new MySqlSchemaDataTypeInference(), changelogMode, sourceTimeZone);
         this.includeSchemaChanges = includeSchemaChanges;
         this.hostname = hostname;
         this.port = port;
         this.isAddMeta = isAddMeta;
+        this.readableMetadataList = readableMetadataList;
     }
 
     @Override
@@ -133,12 +133,23 @@ public class MySqlEventDeserializer extends DebeziumEventDeserializationSchema {
 
     @Override
     protected Map<String, String> getMetadata(SourceRecord record) {
-        Map<String, String> map = new HashMap<>();
+        Map<String, String> metadataMap = new HashMap<>();
         if (isAddMeta) {
-            map.put(MySqlDataSourceOptions.HOSTNAME.key(), hostname);
-            map.put(MySqlDataSourceOptions.PORT.key(), port);
+            metadataMap.put(MySqlDataSourceOptions.HOSTNAME.key(), hostname);
+            metadataMap.put(MySqlDataSourceOptions.PORT.key(), port);
         }
-        return map;
+        readableMetadataList.forEach(
+                (mySqlReadableMetadata -> {
+                    Object metadata = mySqlReadableMetadata.getConverter().read(record);
+                    if (mySqlReadableMetadata.equals(MySqlReadableMetadata.OP_TS)) {
+                        metadataMap.put(
+                                mySqlReadableMetadata.getKey(),
+                                String.valueOf(((TimestampData) metadata).getMillisecond()));
+                    } else {
+                        metadataMap.put(mySqlReadableMetadata.getKey(), String.valueOf(metadata));
+                    }
+                }));
+        return metadataMap;
     }
 
     @Override

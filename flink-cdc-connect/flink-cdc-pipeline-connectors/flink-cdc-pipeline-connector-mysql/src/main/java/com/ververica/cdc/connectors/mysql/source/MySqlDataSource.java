@@ -23,10 +23,15 @@ import com.ververica.cdc.common.source.DataSource;
 import com.ververica.cdc.common.source.EventSourceProvider;
 import com.ververica.cdc.common.source.FlinkSourceProvider;
 import com.ververica.cdc.common.source.MetadataAccessor;
+import com.ververica.cdc.common.source.SupportedMetadataColumn;
 import com.ververica.cdc.connectors.mysql.source.config.MySqlSourceConfig;
 import com.ververica.cdc.connectors.mysql.source.config.MySqlSourceConfigFactory;
 import com.ververica.cdc.connectors.mysql.source.reader.MySqlPipelineRecordEmitter;
+import com.ververica.cdc.connectors.mysql.table.MySqlReadableMetadata;
 import com.ververica.cdc.debezium.table.DebeziumChangelogMode;
+
+import java.util.ArrayList;
+import java.util.List;
 
 /** A {@link DataSource} for mysql cdc connector. */
 @Internal
@@ -34,10 +39,18 @@ public class MySqlDataSource implements DataSource {
 
     private final MySqlSourceConfigFactory configFactory;
     private final MySqlSourceConfig sourceConfig;
+    private final List<MySqlReadableMetadata> readableMetadataList;
 
     public MySqlDataSource(MySqlSourceConfigFactory configFactory) {
+        this(configFactory, new ArrayList<>());
+    }
+
+    public MySqlDataSource(
+            MySqlSourceConfigFactory configFactory,
+            List<MySqlReadableMetadata> readableMetadataList) {
         this.configFactory = configFactory;
         this.sourceConfig = configFactory.createConfig(0);
+        this.readableMetadataList = readableMetadataList;
     }
 
     @Override
@@ -49,7 +62,8 @@ public class MySqlDataSource implements DataSource {
                         sourceConfig.getServerTimeZone(),
                         sourceConfig.getHostname(),
                         String.valueOf(sourceConfig.getPort()),
-                        sourceConfig.isAddMeta());
+                        sourceConfig.isAddMeta(),
+                        readableMetadataList);
 
         MySqlSource<Event> source =
                 new MySqlSource<>(
@@ -70,5 +84,14 @@ public class MySqlDataSource implements DataSource {
     @VisibleForTesting
     public MySqlSourceConfig getSourceConfig() {
         return sourceConfig;
+    }
+
+    @Override
+    public SupportedMetadataColumn[] supportedMetadataColumns() {
+        if (readableMetadataList.contains(MySqlReadableMetadata.OP_TS)) {
+            return new SupportedMetadataColumn[] {new OpTsMetadataColumn()};
+        } else {
+            return new SupportedMetadataColumn[0];
+        }
     }
 }

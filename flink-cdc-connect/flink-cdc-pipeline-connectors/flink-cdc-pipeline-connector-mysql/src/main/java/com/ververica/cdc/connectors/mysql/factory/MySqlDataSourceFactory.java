@@ -27,12 +27,14 @@ import com.ververica.cdc.common.factories.DataSourceFactory;
 import com.ververica.cdc.common.factories.Factory;
 import com.ververica.cdc.common.schema.Selectors;
 import com.ververica.cdc.common.source.DataSource;
+import com.ververica.cdc.common.utils.StringUtils;
 import com.ververica.cdc.connectors.mysql.source.MySqlDataSource;
 import com.ververica.cdc.connectors.mysql.source.config.MySqlSourceConfig;
 import com.ververica.cdc.connectors.mysql.source.config.MySqlSourceConfigFactory;
 import com.ververica.cdc.connectors.mysql.source.config.ServerIdRange;
 import com.ververica.cdc.connectors.mysql.source.offset.BinlogOffset;
 import com.ververica.cdc.connectors.mysql.source.offset.BinlogOffsetBuilder;
+import com.ververica.cdc.connectors.mysql.table.MySqlReadableMetadata;
 import com.ververica.cdc.connectors.mysql.table.StartupOptions;
 import com.ververica.cdc.connectors.mysql.utils.MySqlSchemaUtils;
 import com.ververica.cdc.connectors.mysql.utils.OptionUtils;
@@ -41,6 +43,8 @@ import org.slf4j.LoggerFactory;
 
 import java.time.Duration;
 import java.time.ZoneId;
+import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -58,6 +62,7 @@ import static com.ververica.cdc.connectors.mysql.source.MySqlDataSourceOptions.C
 import static com.ververica.cdc.connectors.mysql.source.MySqlDataSourceOptions.HEARTBEAT_INTERVAL;
 import static com.ververica.cdc.connectors.mysql.source.MySqlDataSourceOptions.HOSTNAME;
 import static com.ververica.cdc.connectors.mysql.source.MySqlDataSourceOptions.IS_ADD_META;
+import static com.ververica.cdc.connectors.mysql.source.MySqlDataSourceOptions.METADATA_LIST;
 import static com.ververica.cdc.connectors.mysql.source.MySqlDataSourceOptions.PASSWORD;
 import static com.ververica.cdc.connectors.mysql.source.MySqlDataSourceOptions.PORT;
 import static com.ververica.cdc.connectors.mysql.source.MySqlDataSourceOptions.SCAN_INCREMENTAL_CLOSE_IDLE_READER_ENABLED;
@@ -199,8 +204,33 @@ public class MySqlDataSourceFactory implements DataSourceFactory {
             LOG.info("Add chunkKeyColumn {}.", chunkKeyColumnMap);
             configFactory.chunkKeyColumn(chunkKeyColumnMap);
         }
+        String metadataList = config.get(METADATA_LIST);
+        List<MySqlReadableMetadata> readableMetadataList = listReadableMetadata(metadataList);
+        return new MySqlDataSource(configFactory, readableMetadataList);
+    }
 
-        return new MySqlDataSource(configFactory);
+    private List<MySqlReadableMetadata> listReadableMetadata(String metadataList) {
+        if (StringUtils.isNullOrWhitespaceOnly(metadataList)) {
+            return new ArrayList<>();
+        }
+        Set<String> readableMetadataList =
+                Arrays.stream(metadataList.split(","))
+                        .map(String::trim)
+                        .collect(Collectors.toSet());
+        List<MySqlReadableMetadata> foundMetadata = new ArrayList<>();
+        for (MySqlReadableMetadata metadata : MySqlReadableMetadata.values()) {
+            if (readableMetadataList.contains(metadata.getKey())) {
+                foundMetadata.add(metadata);
+                readableMetadataList.remove(metadata.getKey());
+            }
+        }
+        if (readableMetadataList.isEmpty()) {
+            return foundMetadata;
+        }
+        throw new IllegalArgumentException(
+                String.format(
+                        "[%s] cannot be found in mysql metadata.",
+                        String.join(", ", readableMetadataList)));
     }
 
     @Override
@@ -239,6 +269,7 @@ public class MySqlDataSourceFactory implements DataSourceFactory {
         options.add(SCAN_NEWLY_ADDED_TABLE_ENABLED);
         options.add(HEARTBEAT_INTERVAL);
         options.add(SCHEMA_CHANGE_ENABLED);
+        options.add(METADATA_LIST);
         return options;
     }
 

@@ -37,6 +37,9 @@ import com.ververica.cdc.common.annotation.Internal;
 import com.ververica.cdc.common.annotation.VisibleForTesting;
 import com.ververica.cdc.common.data.RecordData;
 import com.ververica.cdc.common.data.StringData;
+import com.ververica.cdc.common.data.TimestampData;
+import com.ververica.cdc.common.event.AddColumnEvent;
+import com.ververica.cdc.common.event.CreateTableEvent;
 import com.ververica.cdc.common.event.DataChangeEvent;
 import com.ververica.cdc.common.event.Event;
 import com.ververica.cdc.common.event.FlushEvent;
@@ -47,10 +50,12 @@ import com.ververica.cdc.common.pipeline.SchemaChangeBehavior;
 import com.ververica.cdc.common.schema.Column;
 import com.ververica.cdc.common.schema.Schema;
 import com.ververica.cdc.common.schema.Selectors;
+import com.ververica.cdc.common.source.SupportedMetadataColumn;
 import com.ververica.cdc.common.types.DataType;
 import com.ververica.cdc.common.types.DataTypeFamily;
 import com.ververica.cdc.common.types.DataTypeRoot;
 import com.ververica.cdc.common.utils.ChangeEventUtils;
+import com.ververica.cdc.common.utils.SchemaUtils;
 import com.ververica.cdc.runtime.operators.schema.coordinator.SchemaRegistry;
 import com.ververica.cdc.runtime.operators.schema.event.CoordinationResponseUtils;
 import com.ververica.cdc.runtime.operators.schema.event.SchemaChangeProcessingResponse;
@@ -67,7 +72,9 @@ import javax.annotation.Nullable;
 
 import java.time.Duration;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
@@ -97,6 +104,7 @@ public class SchemaOperator extends AbstractStreamOperator<Event>
     private final long rpcTimeOutInMillis;
     private final SchemaChangeBehavior schemaChangeBehavior;
     private transient int subTaskId;
+    private final Tuple2<String, SupportedMetadataColumn> opTsMetaColumnName;
 
     @VisibleForTesting
     public SchemaOperator(Duration rpcTimeOut, List<Tuple2<String, TableId>> routingRules) {
@@ -104,16 +112,19 @@ public class SchemaOperator extends AbstractStreamOperator<Event>
         this.rpcTimeOutInMillis = rpcTimeOut.toMillis();
         this.schemaChangeBehavior = SchemaChangeBehavior.EVOLVE;
         this.routingRules = routingRules;
+        this.opTsMetaColumnName = null;
     }
 
     public SchemaOperator(
             Duration rpcTimeOut,
             SchemaChangeBehavior schemaChangeBehavior,
-            List<Tuple2<String, TableId>> routingRules) {
+            List<Tuple2<String, TableId>> routingRules,
+            @Nullable Tuple2<String, SupportedMetadataColumn> opTsMetaColumnName) {
         this.chainingStrategy = ChainingStrategy.ALWAYS;
         this.rpcTimeOutInMillis = rpcTimeOut.toMillis();
         this.schemaChangeBehavior = schemaChangeBehavior;
         this.routingRules = routingRules;
+        this.opTsMetaColumnName = opTsMetaColumnName;
     }
 
     @Override
@@ -217,6 +228,8 @@ public class SchemaOperator extends AbstractStreamOperator<Event>
                             normalizeSchemaChangeEvents(event, optionalRoutedTable.get(), false)));
         } else if (Boolean.FALSE.equals(schemaDivergesMap.getIfPresent(tableId))) {
             output.collect(new StreamRecord<>(normalizeSchemaChangeEvents(event, true)));
+        } else if (opTsMetaColumnName != null) {
+            output.collect(new StreamRecord<>(normalizeSchemaChangeEvents(event, false)));
         } else {
             output.collect(streamRecord);
         }
@@ -232,7 +245,7 @@ public class SchemaOperator extends AbstractStreamOperator<Event>
         try {
             Schema originalSchema = this.originalSchema.get(event.tableId());
             Schema evolvedTableSchema = evolvedSchema.get(renamedTableId);
-            if (originalSchema.equals(evolvedTableSchema)) {
+            if (opTsMetaColumnName == null && originalSchema.equals(evolvedTableSchema)) {
                 return ChangeEventUtils.recreateDataChangeEvent(event, renamedTableId);
             }
             switch (event.op()) {
@@ -243,7 +256,8 @@ public class SchemaOperator extends AbstractStreamOperator<Event>
                                     event.after(),
                                     originalSchema,
                                     evolvedTableSchema,
-                                    tolerantMode),
+                                    tolerantMode,
+                                    event.meta()),
                             event.meta());
                 case UPDATE:
                     return DataChangeEvent.updateEvent(
@@ -252,12 +266,14 @@ public class SchemaOperator extends AbstractStreamOperator<Event>
                                     event.before(),
                                     originalSchema,
                                     evolvedTableSchema,
-                                    tolerantMode),
+                                    tolerantMode,
+                                    Collections.emptyMap()),
                             regenerateRecordData(
                                     event.after(),
                                     originalSchema,
                                     evolvedTableSchema,
-                                    tolerantMode),
+                                    tolerantMode,
+                                    event.meta()),
                             event.meta());
                 case DELETE:
                     return DataChangeEvent.deleteEvent(
@@ -266,7 +282,8 @@ public class SchemaOperator extends AbstractStreamOperator<Event>
                                     event.before(),
                                     originalSchema,
                                     evolvedTableSchema,
-                                    tolerantMode),
+                                    tolerantMode,
+                                    Collections.emptyMap()),
                             event.meta());
                 case REPLACE:
                     return DataChangeEvent.replaceEvent(
@@ -275,7 +292,8 @@ public class SchemaOperator extends AbstractStreamOperator<Event>
                                     event.after(),
                                     originalSchema,
                                     evolvedTableSchema,
-                                    tolerantMode),
+                                    tolerantMode,
+                                    event.meta()),
                             event.meta());
                 default:
                     throw new IllegalArgumentException(
@@ -290,7 +308,8 @@ public class SchemaOperator extends AbstractStreamOperator<Event>
             RecordData recordData,
             Schema originalSchema,
             Schema routedTableSchema,
-            boolean tolerantMode) {
+            boolean tolerantMode,
+            Map<String, String> meta) {
         // Regenerate record data
         List<RecordData.FieldGetter> fieldGetters = new ArrayList<>();
         for (Column column : routedTableSchema.getColumns()) {
@@ -299,6 +318,10 @@ public class SchemaOperator extends AbstractStreamOperator<Event>
             if (columnIndex == -1) {
                 fieldGetters.add(new NullFieldGetter());
             } else {
+                if (opTsMetaColumnName != null && columnName.equals(opTsMetaColumnName.f0)) {
+                    fieldGetters.add(new OpTsFieldGetter(opTsMetaColumnName.f1, meta));
+                    continue;
+                }
                 RecordData.FieldGetter fieldGetter =
                         RecordData.createFieldGetter(
                                 originalSchema.getColumn(columnName).get().getType(), columnIndex);
@@ -320,10 +343,12 @@ public class SchemaOperator extends AbstractStreamOperator<Event>
         BinaryRecordDataGenerator recordDataGenerator =
                 new BinaryRecordDataGenerator(
                         routedTableSchema.getColumnDataTypes().toArray(new DataType[0]));
-        return recordDataGenerator.generate(
-                fieldGetters.stream()
-                        .map(fieldGetter -> fieldGetter.getFieldOrNull(recordData))
-                        .toArray());
+        RecordData record =
+                recordDataGenerator.generate(
+                        fieldGetters.stream()
+                                .map(fieldGetter -> fieldGetter.getFieldOrNull(recordData))
+                                .toArray());
+        return record;
     }
 
     private Optional<TableId> getRoutedTable(TableId originalTableId) {
@@ -346,6 +371,12 @@ public class SchemaOperator extends AbstractStreamOperator<Event>
                             schemaChangeEvent));
         }
 
+        if (opTsMetaColumnName != null) {
+            // recreate SchemaChangeEvent to add op_ts column
+            schemaChangeEvent =
+                    transformSchemaChangeEventWithOpTsColumn(tableId, schemaChangeEvent);
+            LOG.info("recreate SchemaChangeEvent to add op_ts column: {}", schemaChangeEvent);
+        }
         // The request will block if another schema change event is being handled
         SchemaChangeResponse response = requestSchemaChange(tableId, schemaChangeEvent);
         if (response.isAccepted()) {
@@ -377,6 +408,68 @@ public class SchemaOperator extends AbstractStreamOperator<Event>
                     schemaChangeEvent);
         } else {
             throw new IllegalStateException("Unexpected response status " + response);
+        }
+    }
+
+    private SchemaChangeEvent transformSchemaChangeEventWithOpTsColumn(
+            TableId tableId, SchemaChangeEvent event) {
+        if (event instanceof CreateTableEvent) {
+            Schema originalSchema = ((CreateTableEvent) event).getSchema();
+            List<Column> columns = originalSchema.getColumns();
+            if (columns.stream()
+                    .anyMatch(column -> column.getName().equals(opTsMetaColumnName.f0))) {
+                LOG.error(
+                        "Metadata column name collision: table {} already has op_ts column {}",
+                        tableId,
+                        opTsMetaColumnName);
+                throw new IllegalStateException(
+                        "Metadata column name collision: table "
+                                + tableId
+                                + " already has op_ts column "
+                                + opTsMetaColumnName.f0);
+            }
+            columns.add(
+                    Column.physicalColumn(opTsMetaColumnName.f0, opTsMetaColumnName.f1.getType()));
+            Schema newSchema = originalSchema.copy(columns);
+            return new CreateTableEvent(tableId, newSchema);
+        } else {
+            if (event instanceof AddColumnEvent) {
+                List<AddColumnEvent.ColumnWithPosition> addColumns =
+                        ((AddColumnEvent) event).getAddedColumns();
+                if (addColumns.stream()
+                        .anyMatch(
+                                column ->
+                                        column.getAddColumn()
+                                                .getName()
+                                                .equals(opTsMetaColumnName.f0))) {
+                    LOG.error(
+                            "Could not add columns {}, because table {} already has op_ts metadata column {}",
+                            addColumns,
+                            tableId,
+                            opTsMetaColumnName);
+                    throw new IllegalStateException(
+                            "Added column names conflict with metadata column names: table "
+                                    + tableId
+                                    + " already has op_ts column "
+                                    + opTsMetaColumnName.f0);
+                }
+            }
+            try {
+                List<Column> columnsWithoutOpTs =
+                        originalSchema.get(tableId).getColumns().stream()
+                                .filter(col -> !col.getName().equals(opTsMetaColumnName.f0))
+                                .collect(Collectors.toList());
+                Optional<SchemaChangeEvent> schemaChangeEvent =
+                        SchemaUtils.transformSchemaChangeEvent(true, columnsWithoutOpTs, event);
+                if (schemaChangeEvent.isPresent()) {
+                    return schemaChangeEvent.get();
+                } else {
+                    throw new IllegalStateException(
+                            "Unexpected schema change event with OpTs: " + event);
+                }
+            } catch (ExecutionException e) {
+                throw new RuntimeException(e);
+            }
         }
     }
 
@@ -466,6 +559,25 @@ public class SchemaOperator extends AbstractStreamOperator<Event>
         } catch (IllegalStateException e) {
             // schema fetch failed, regard it as diverged
             return true;
+        }
+    }
+
+    private static class OpTsFieldGetter implements RecordData.FieldGetter {
+        private final Object opTsValue;
+
+        public OpTsFieldGetter(
+                SupportedMetadataColumn supportedMetadataColumn, Map<String, String> meta) {
+            if (meta.isEmpty()) {
+                LOG.warn("Record data meta is empty");
+                opTsValue = TimestampData.fromMillis(0);
+            } else {
+                opTsValue = supportedMetadataColumn.read(meta);
+            }
+        }
+
+        @Override
+        public Object getFieldOrNull(RecordData recordData) {
+            return opTsValue;
         }
     }
 

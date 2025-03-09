@@ -16,6 +16,7 @@
 
 package com.ververica.cdc.composer.flink;
 
+import org.apache.flink.api.java.tuple.Tuple2;
 import org.apache.flink.configuration.DeploymentOptions;
 import org.apache.flink.streaming.api.datastream.DataStream;
 import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
@@ -27,6 +28,8 @@ import com.ververica.cdc.common.factories.DataSinkFactory;
 import com.ververica.cdc.common.factories.FactoryHelper;
 import com.ververica.cdc.common.pipeline.PipelineOptions;
 import com.ververica.cdc.common.sink.DataSink;
+import com.ververica.cdc.common.source.DataSource;
+import com.ververica.cdc.common.source.SupportedMetadataColumn;
 import com.ververica.cdc.composer.PipelineComposer;
 import com.ververica.cdc.composer.PipelineExecution;
 import com.ververica.cdc.composer.definition.PipelineDef;
@@ -99,9 +102,25 @@ public class FlinkPipelineComposer implements PipelineComposer {
         DataSourceTranslator sourceTranslator = new DataSourceTranslator();
         List<SourceDef> sourceDefs = pipelineDef.getSources();
         DataStream<Event> stream = null;
+        Tuple2<String, SupportedMetadataColumn> opTsMetadataColumn = null;
         for (SourceDef sourceDef : sourceDefs) {
+            DataSource dataSource =
+                    sourceTranslator.createDataSource(sourceDef, env, pipelineDef.getConfig());
+            if (opTsMetadataColumn == null) {
+                for (SupportedMetadataColumn col : dataSource.supportedMetadataColumns()) {
+                    if ("op_ts".equals(col.getName())) {
+                        opTsMetadataColumn =
+                                new Tuple2<>(
+                                        sourceDef
+                                                .getConfig()
+                                                .get(SourceDef.METADATA_OP_TS_NEWLY_ADDED_COLUMN),
+                                        col);
+                        break;
+                    }
+                }
+            }
             DataStream<Event> streamBranch =
-                    sourceTranslator.translate(sourceDef, env, pipelineDef.getConfig());
+                    sourceTranslator.translate(sourceDef, env, parallelism, dataSource);
             if (stream == null) {
                 stream = streamBranch;
             } else {
@@ -121,7 +140,8 @@ public class FlinkPipelineComposer implements PipelineComposer {
                         pipelineDef.getConfig().get(PipelineOptions.PIPELINE_SCHEMA_OPERATOR_UID),
                         pipelineDef
                                 .getConfig()
-                                .get(PipelineOptions.PIPELINE_SCHEMA_OPERATOR_RPC_TIMEOUT));
+                                .get(PipelineOptions.PIPELINE_SCHEMA_OPERATOR_RPC_TIMEOUT),
+                        opTsMetadataColumn);
         stream =
                 schemaOperatorTranslator.translate(
                         stream, parallelism, dataSink.getMetadataApplier(), pipelineDef.getRoute());

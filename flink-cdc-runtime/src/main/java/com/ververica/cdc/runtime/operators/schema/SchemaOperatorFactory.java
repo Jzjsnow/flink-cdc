@@ -28,6 +28,7 @@ import com.ververica.cdc.common.event.Event;
 import com.ververica.cdc.common.event.TableId;
 import com.ververica.cdc.common.pipeline.SchemaChangeBehavior;
 import com.ververica.cdc.common.sink.MetadataApplier;
+import com.ververica.cdc.common.source.SupportedMetadataColumn;
 import com.ververica.cdc.runtime.operators.schema.coordinator.SchemaRegistryProvider;
 
 import java.time.Duration;
@@ -48,8 +49,11 @@ public class SchemaOperatorFactory extends SimpleOperatorFactory<Event>
             MetadataApplier metadataApplier,
             Duration rpcTimeOut,
             SchemaChangeBehavior schemaChangeBehavior,
-            List<Tuple2<String, TableId>> routingRules) {
-        super(new SchemaOperator(rpcTimeOut, schemaChangeBehavior, routingRules));
+            List<Tuple2<String, TableId>> routingRules,
+            Tuple2<String, SupportedMetadataColumn> opTsMetaColumnName) {
+        super(
+                new SchemaOperator(
+                        rpcTimeOut, schemaChangeBehavior, routingRules, opTsMetaColumnName));
         this.metadataApplier = metadataApplier;
         this.schemaChangeBehavior = schemaChangeBehavior;
         this.routingRules = routingRules;

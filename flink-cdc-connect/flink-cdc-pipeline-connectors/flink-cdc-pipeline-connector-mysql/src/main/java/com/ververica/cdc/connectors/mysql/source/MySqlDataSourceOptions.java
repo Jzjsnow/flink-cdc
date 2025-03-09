@@ -263,4 +263,13 @@ public class MySqlDataSourceOptions {
                     .booleanType()
                     .defaultValue(false)
                     .withDescription("Whether to add IP address information in meta injury.");
+
+    @Experimental
+    public static final ConfigOption<String> METADATA_LIST =
+            ConfigOptions.key("metadata.list")
+                    .stringType()
+                    .noDefaultValue()
+                    .withDescription(
+                            "List of readable metadata from SourceRecord to be passed to downstream, split by `,`. "
+                                    + "Available readable metadata are: op_ts.");
 }

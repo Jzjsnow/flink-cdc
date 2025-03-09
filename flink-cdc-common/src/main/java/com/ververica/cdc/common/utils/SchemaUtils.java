@@ -27,10 +27,13 @@ import com.ververica.cdc.common.event.RenameColumnEvent;
 import com.ververica.cdc.common.event.SchemaChangeEvent;
 import com.ververica.cdc.common.schema.Column;
 import com.ververica.cdc.common.schema.Schema;
+import com.ververica.cdc.common.types.DataType;
 
 import java.util.ArrayList;
 import java.util.LinkedList;
 import java.util.List;
+import java.util.Map;
+import java.util.Optional;
 import java.util.stream.Collectors;
 
 /** Utils for {@link Schema} to perform the ability of evolution. */
@@ -386,5 +389,93 @@ public class SchemaUtils {
         sinkDataTypeRoots.clear();
         sinkDataTypeRoots.addAll(newSinkDataTypes);
         return oldSchema.copy(columns);
+    }
+
+    /**
+     * This function determines if the given schema change event {@code event} should be sent to
+     * downstream based on if the given transform rule has asterisk, and what columns are
+     * referenced.
+     *
+     * <p>For example, if {@code hasAsterisk} is false, then all {@code AddColumnEvent} and {@code
+     * DropColumnEvent} should be ignored since asterisk-less transform should not emit schema
+     * change events that change number of downstream columns.
+     *
+     * <p>Also, {@code referencedColumns} will be used to determine if the schema change event
+     * affects any referenced columns, since if a column has been projected out of downstream, its
+     * corresponding schema change events should not be emitted, either.
+     *
+     * <p>For the case when {@code hasAsterisk} is true, things will be cleaner since we don't have
+     * to filter out any schema change events. All we need to do is to change {@code
+     * AddColumnEvent}'s inserting position, and replacing `FIRST` / `LAST` with column-relative
+     * position indicators. This is necessary since extra calculated columns might be added, and
+     * `FIRST` / `LAST` position might differ.
+     */
+    public static Optional<SchemaChangeEvent> transformSchemaChangeEvent(
+            boolean hasAsterisk, List<Column> referencedColumns, SchemaChangeEvent event) {
+        Optional<SchemaChangeEvent> evolvedSchemaChangeEvent = Optional.empty();
+        if (event instanceof AddColumnEvent) {
+            // Send add column events to downstream if there's an asterisk
+            if (hasAsterisk) {
+                List<AddColumnEvent.ColumnWithPosition> addedColumns =
+                        ((AddColumnEvent) event)
+                                .getAddedColumns().stream()
+                                        .map(
+                                                e -> {
+                                                    if (AddColumnEvent.ColumnPosition.LAST.equals(
+                                                            e.getPosition())) {
+                                                        return new AddColumnEvent
+                                                                .ColumnWithPosition(
+                                                                e.getAddColumn(),
+                                                                AddColumnEvent.ColumnPosition.AFTER,
+                                                                referencedColumns.get(
+                                                                        referencedColumns.size()
+                                                                                - 1));
+                                                    } else if (AddColumnEvent.ColumnPosition.FIRST
+                                                            .equals(e.getPosition())) {
+                                                        return new AddColumnEvent
+                                                                .ColumnWithPosition(
+                                                                e.getAddColumn(),
+                                                                AddColumnEvent.ColumnPosition
+                                                                        .BEFORE,
+                                                                referencedColumns.get(0));
+                                                    } else {
+                                                        return e;
+                                                    }
+                                                })
+                                        .collect(Collectors.toList());
+                evolvedSchemaChangeEvent =
+                        Optional.of(new AddColumnEvent(event.tableId(), addedColumns));
+            }
+        } else if (event instanceof AlterColumnTypeEvent) {
+            AlterColumnTypeEvent alterColumnTypeEvent = (AlterColumnTypeEvent) event;
+            if (hasAsterisk) {
+                // In wildcard mode, all alter column type events should be sent to downstream
+                evolvedSchemaChangeEvent = Optional.of(event);
+            } else {
+                // Or, we need to filter out those referenced columns and reconstruct
+                // SchemaChangeEvents
+                Map<String, DataType> newDataTypeMap =
+                        alterColumnTypeEvent.getTypeMapping().entrySet().stream()
+                                .filter(e -> referencedColumns.contains(e.getKey()))
+                                .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
+                if (!newDataTypeMap.isEmpty()) {
+                    evolvedSchemaChangeEvent =
+                            Optional.of(
+                                    new AlterColumnTypeEvent(
+                                            alterColumnTypeEvent.tableId(), newDataTypeMap));
+                }
+            }
+        } else if (event instanceof RenameColumnEvent) {
+            if (hasAsterisk) {
+                evolvedSchemaChangeEvent = Optional.of(event);
+            }
+        } else if (event instanceof DropColumnEvent) {
+            if (hasAsterisk) {
+                evolvedSchemaChangeEvent = Optional.of(event);
+            }
+        } else {
+            evolvedSchemaChangeEvent = Optional.of(event);
+        }
+        return evolvedSchemaChangeEvent;
     }
 }

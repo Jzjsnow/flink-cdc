@@ -26,6 +26,7 @@ import com.ververica.cdc.common.event.SchemaChangeEvent;
 import com.ververica.cdc.common.event.TableId;
 import com.ververica.cdc.common.pipeline.SchemaChangeBehavior;
 import com.ververica.cdc.common.sink.MetadataApplier;
+import com.ververica.cdc.common.source.SupportedMetadataColumn;
 import com.ververica.cdc.composer.definition.RouteDef;
 import com.ververica.cdc.runtime.operators.schema.SchemaOperatorFactory;
 import com.ververica.cdc.runtime.typeutils.EventTypeInfo;
@@ -43,14 +44,17 @@ public class SchemaOperatorTranslator {
     private final SchemaChangeBehavior schemaChangeBehavior;
     private final String schemaOperatorUid;
     private final Duration rpcTimeOut;
+    private final Tuple2<String, SupportedMetadataColumn> opTsMetaColumnName;
 
     public SchemaOperatorTranslator(
             SchemaChangeBehavior schemaChangeBehavior,
             String schemaOperatorUid,
-            Duration rpcTimeOut) {
+            Duration rpcTimeOut,
+            Tuple2<String, SupportedMetadataColumn> opTsMetaColumnName) {
         this.schemaChangeBehavior = schemaChangeBehavior;
         this.schemaOperatorUid = schemaOperatorUid;
         this.rpcTimeOut = rpcTimeOut;
+        this.opTsMetaColumnName = opTsMetaColumnName;
     }
 
     public DataStream<Event> translate(
@@ -58,7 +62,13 @@ public class SchemaOperatorTranslator {
             int parallelism,
             MetadataApplier metadataApplier,
             List<RouteDef> routes) {
-        return addSchemaOperator(input, parallelism, metadataApplier, schemaChangeBehavior, routes);
+        return addSchemaOperator(
+                input,
+                parallelism,
+                metadataApplier,
+                schemaChangeBehavior,
+                routes,
+                opTsMetaColumnName);
     }
 
     public String getSchemaOperatorUid() {
@@ -70,7 +80,8 @@ public class SchemaOperatorTranslator {
             int parallelism,
             MetadataApplier metadataApplier,
             SchemaChangeBehavior schemaChangeBehavior,
-            List<RouteDef> routes) {
+            List<RouteDef> routes,
+            Tuple2<String, SupportedMetadataColumn> opTsMetaColumnName) {
         List<Tuple2<String, TableId>> routingRules = new ArrayList<>();
         for (RouteDef route : routes) {
             routingRules.add(
@@ -81,7 +92,11 @@ public class SchemaOperatorTranslator {
                         "SchemaOperator",
                         new EventTypeInfo(),
                         new SchemaOperatorFactory(
-                                metadataApplier, rpcTimeOut, schemaChangeBehavior, routingRules));
+                                metadataApplier,
+                                rpcTimeOut,
+                                schemaChangeBehavior,
+                                routingRules,
+                                opTsMetaColumnName));
         stream.uid(schemaOperatorUid).setParallelism(parallelism);
         return stream;
     }

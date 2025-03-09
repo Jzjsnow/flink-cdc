@@ -102,7 +102,7 @@ public class DorisMetadataApplier implements MetadataApplier {
             }
         } catch (Exception ex) {
             throw new RuntimeException(
-                    "Failed to schema change, " + event + ", reason: " + ex.getMessage());
+                    "Failed to schema change, " + event + ", reason: " + ex.getMessage(), ex);
         }
     }
 
