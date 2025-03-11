@@ -396,7 +396,7 @@ public class SchemaOperatorTest {
                                                     LocalDateTime.of(2025, 1, 1, 0, 0, 0),
                                                     ZoneId.of("Asia/Shanghai"))
                                             .toInstant()),
-                            TimestampData.fromMillis(0L)
+                            null
                         });
         RecordData after =
                 generator.generate(
@@ -452,7 +452,7 @@ public class SchemaOperatorTest {
                                                     LocalDateTime.of(2025, 3, 1, 0, 0, 0),
                                                     ZoneId.of("Asia/Shanghai"))
                                             .toInstant()),
-                            TimestampData.fromMillis(0L)
+                            null
                         });
 
         return Arrays.asList(

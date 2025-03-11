@@ -114,6 +114,7 @@ public abstract class DebeziumEventDeserializationSchema extends SourceRecordEve
         Struct value = (Struct) record.value();
         Schema valueSchema = record.valueSchema();
         Map<String, String> meta = getMetadata(record);
+        LOG.debug("Get metadata from SourceRecord {}", meta);
 
         if (op == Envelope.Operation.CREATE || op == Envelope.Operation.READ) {
             RecordData after = extractAfterDataRecord(value, valueSchema);

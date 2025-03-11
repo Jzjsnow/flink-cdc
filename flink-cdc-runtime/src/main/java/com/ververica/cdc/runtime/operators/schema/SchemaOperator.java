@@ -456,8 +456,7 @@ public class SchemaOperator extends AbstractStreamOperator<Event>
         if (event instanceof CreateTableEvent) {
             Schema originalSchema = ((CreateTableEvent) event).getSchema();
             List<Column> columns = originalSchema.getColumns();
-            if (columns.stream()
-                    .anyMatch(column -> column.getName().equals(opTsMetaColumnName.f0))) {
+            if (checkColumnExists(columns, opTsMetaColumnName.f0)) {
                 LOG.error(
                         "Metadata column name collision: table {} already has op_ts column {}",
                         tableId,
@@ -474,14 +473,14 @@ public class SchemaOperator extends AbstractStreamOperator<Event>
             return new CreateTableEvent(tableId, newSchema);
         } else {
             if (event instanceof AddColumnEvent) {
-                List<AddColumnEvent.ColumnWithPosition> addColumns =
-                        ((AddColumnEvent) event).getAddedColumns();
-                if (addColumns.stream()
-                        .anyMatch(
-                                column ->
-                                        column.getAddColumn()
-                                                .getName()
-                                                .equals(opTsMetaColumnName.f0))) {
+                List<Column> addColumns =
+                        ((AddColumnEvent) event)
+                                .getAddedColumns().stream()
+                                        .map(AddColumnEvent.ColumnWithPosition::getAddColumn)
+                                        .collect(Collectors.toList());
+                if (checkColumnExists(addColumns, opTsMetaColumnName.f0)) {
+                    // When the op_ts metadata column is set, the source table cannot add a column
+                    // with the same name
                     LOG.error(
                             "Could not add columns {}, because table {} already has op_ts metadata column {}",
                             addColumns,
@@ -499,6 +498,8 @@ public class SchemaOperator extends AbstractStreamOperator<Event>
                         originalSchema.get(tableId).getColumns().stream()
                                 .filter(col -> !col.getName().equals(opTsMetaColumnName.f0))
                                 .collect(Collectors.toList());
+                // Transform the AddColumnEvent to add the column after the last column of the
+                // source table
                 Optional<SchemaChangeEvent> schemaChangeEvent =
                         SchemaUtils.transformSchemaChangeEvent(true, columnsWithoutOpTs, event);
                 if (schemaChangeEvent.isPresent()) {
@@ -511,6 +512,10 @@ public class SchemaOperator extends AbstractStreamOperator<Event>
                 throw new RuntimeException(e);
             }
         }
+    }
+
+    private boolean checkColumnExists(List<Column> columns, String columnName) {
+        return columns.stream().anyMatch(column -> column.getName().equals(columnName));
     }
 
     private SchemaChangeResponse requestSchemaChange(
