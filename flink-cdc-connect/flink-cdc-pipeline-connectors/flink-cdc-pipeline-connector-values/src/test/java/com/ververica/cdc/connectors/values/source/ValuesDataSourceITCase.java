@@ -75,7 +75,6 @@ public class ValuesDataSourceITCase {
                         .executeAndCollect();
         events.forEachRemaining(
                 (event) -> {
-                    System.out.println(event);
                     if (event instanceof DataChangeEvent) {
                         ValuesDatabase.applyDataChangeEvent((DataChangeEvent) event);
                     } else if (event instanceof SchemaChangeEvent) {
@@ -170,10 +169,6 @@ public class ValuesDataSourceITCase {
         results.add("default_namespace.default_schema.table1:col1=1;col2=1;col3=x");
         results.add("default_namespace.default_schema.table1:col1=3;col2=3;col3=x");
         results.add("default_namespace.default_schema.table1:col1=5;col2=5;col3=");
-
-        List<String> res =
-                ValuesDatabase.getResults(TableId.parse("default_namespace.default_schema.table1"));
-        System.out.println(res);
         Assert.assertEquals(
                 results,
                 ValuesDatabase.getResults(
