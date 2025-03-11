@@ -32,7 +32,7 @@ public class OpTsMetadataColumn implements SupportedMetadataColumn {
 
     @Override
     public DataType getType() {
-        return DataTypes.TIMESTAMP().notNull();
+        return DataTypes.TIMESTAMP().nullable();
     }
 
     @Override
@@ -43,7 +43,10 @@ public class OpTsMetadataColumn implements SupportedMetadataColumn {
     @Override
     public Object read(Map<String, String> metadata) {
         if (metadata.containsKey(getName())) {
-            return TimestampData.fromMillis(Long.parseLong(metadata.get(getName())));
+            // The default value of op_ts for snapshot data is 0. If op_ts=0, a NULL value is
+            // returned rather than converted to 1970-01-01T00:00:00
+            long timestamp = Long.parseLong(metadata.get(getName()));
+            return timestamp > 0 ? TimestampData.fromMillis(timestamp) : null;
         }
         throw new IllegalArgumentException("op_ts doesn't exist in the metadata: " + metadata);
     }

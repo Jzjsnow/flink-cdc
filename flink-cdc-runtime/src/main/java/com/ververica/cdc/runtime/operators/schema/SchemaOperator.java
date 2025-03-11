@@ -37,7 +37,6 @@ import com.ververica.cdc.common.annotation.Internal;
 import com.ververica.cdc.common.annotation.VisibleForTesting;
 import com.ververica.cdc.common.data.RecordData;
 import com.ververica.cdc.common.data.StringData;
-import com.ververica.cdc.common.data.TimestampData;
 import com.ververica.cdc.common.event.AddColumnEvent;
 import com.ververica.cdc.common.event.CreateTableEvent;
 import com.ververica.cdc.common.event.DataChangeEvent;
@@ -343,12 +342,10 @@ public class SchemaOperator extends AbstractStreamOperator<Event>
         BinaryRecordDataGenerator recordDataGenerator =
                 new BinaryRecordDataGenerator(
                         routedTableSchema.getColumnDataTypes().toArray(new DataType[0]));
-        RecordData record =
-                recordDataGenerator.generate(
-                        fieldGetters.stream()
-                                .map(fieldGetter -> fieldGetter.getFieldOrNull(recordData))
-                                .toArray());
-        return record;
+        return recordDataGenerator.generate(
+                fieldGetters.stream()
+                        .map(fieldGetter -> fieldGetter.getFieldOrNull(recordData))
+                        .toArray());
     }
 
     private Optional<TableId> getRoutedTable(TableId originalTableId) {
@@ -370,12 +367,55 @@ public class SchemaOperator extends AbstractStreamOperator<Event>
                             "Refused to apply schema change event %s in EXCEPTION mode.",
                             schemaChangeEvent));
         }
-
         if (opTsMetaColumnName != null) {
             // recreate SchemaChangeEvent to add op_ts column
-            schemaChangeEvent =
-                    transformSchemaChangeEventWithOpTsColumn(tableId, schemaChangeEvent);
-            LOG.info("recreate SchemaChangeEvent to add op_ts column: {}", schemaChangeEvent);
+            if (schemaChangeEvent instanceof CreateTableEvent) {
+                try {
+                    // Check if the table has been cached in master and contains the op_ts column
+                    if (!getLatestOriginalSchema(tableId)
+                            .getColumnNames()
+                            .contains(opTsMetaColumnName.f0)) {
+                        // The table has been cached in master, and does not have the op_ts column,
+                        // so we only need to send an AddColumnEvent instead of CreateTableEvent to
+                        // add the column
+                        LOG.info(
+                                "Table {} without column {} has been created in master, send AddColumnEvent to master",
+                                tableId,
+                                opTsMetaColumnName.f0);
+                        schemaChangeEvent =
+                                new AddColumnEvent(
+                                        tableId,
+                                        Collections.singletonList(
+                                                new AddColumnEvent.ColumnWithPosition(
+                                                        Column.physicalColumn(
+                                                                opTsMetaColumnName.f0,
+                                                                opTsMetaColumnName.f1.getType()))));
+                    } else {
+                        // The table has been cached in master, and has the op_ts column, so we
+                        // don't need to transform the original CreateTableEvent, because it will
+                        // end up being ignored by master
+                        LOG.info(
+                                "Table {} with column {} has been created in master",
+                                tableId,
+                                opTsMetaColumnName.f0);
+                    }
+                } catch (IllegalStateException e) {
+                    // The table has not been cached in master, so we need to transform the original
+                    // CreateTableEvent to add op_ts column
+                    LOG.info(
+                            "Table {} has not been created in master, send CreateTableEvent to master",
+                            tableId);
+                    schemaChangeEvent =
+                            transformSchemaChangeEventWithOpTsColumn(tableId, schemaChangeEvent);
+                    LOG.info(
+                            "recreate SchemaChangeEvent to add op_ts column: {}",
+                            schemaChangeEvent);
+                }
+            } else {
+                schemaChangeEvent =
+                        transformSchemaChangeEventWithOpTsColumn(tableId, schemaChangeEvent);
+                LOG.info("recreate SchemaChangeEvent to add op_ts column: {}", schemaChangeEvent);
+            }
         }
         // The request will block if another schema change event is being handled
         SchemaChangeResponse response = requestSchemaChange(tableId, schemaChangeEvent);
@@ -568,8 +608,7 @@ public class SchemaOperator extends AbstractStreamOperator<Event>
         public OpTsFieldGetter(
                 SupportedMetadataColumn supportedMetadataColumn, Map<String, String> meta) {
             if (meta.isEmpty()) {
-                LOG.warn("Record data meta is empty");
-                opTsValue = TimestampData.fromMillis(0);
+                opTsValue = null;
             } else {
                 opTsValue = supportedMetadataColumn.read(meta);
             }

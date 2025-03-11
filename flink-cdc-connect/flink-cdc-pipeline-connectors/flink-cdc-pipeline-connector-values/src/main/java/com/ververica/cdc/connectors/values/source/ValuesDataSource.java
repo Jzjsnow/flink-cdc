@@ -40,7 +40,6 @@ import com.ververica.cdc.common.source.DataSource;
 import com.ververica.cdc.common.source.EventSourceProvider;
 import com.ververica.cdc.common.source.FlinkSourceProvider;
 import com.ververica.cdc.common.source.MetadataAccessor;
-import com.ververica.cdc.common.source.SupportedMetadataColumn;
 import com.ververica.cdc.connectors.values.ValuesDatabase;
 
 import java.io.ByteArrayInputStream;
@@ -84,11 +83,6 @@ public class ValuesDataSource implements DataSource {
     @Override
     public MetadataAccessor getMetadataAccessor() {
         return new ValuesDatabase.ValuesMetadataAccessor();
-    }
-
-    @Override
-    public SupportedMetadataColumn[] supportedMetadataColumns() {
-        return new SupportedMetadataColumn[0];
     }
 
     /**

@@ -88,6 +88,7 @@ public class MySqlDataSource implements DataSource {
 
     @Override
     public SupportedMetadataColumn[] supportedMetadataColumns() {
+        // Currently we only support reading OP_TS from binlog metadata
         if (readableMetadataList.contains(MySqlReadableMetadata.OP_TS)) {
             return new SupportedMetadataColumn[] {new OpTsMetadataColumn()};
         } else {

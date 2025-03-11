@@ -59,6 +59,7 @@ public class FlinkPipelineComposer implements PipelineComposer {
 
     private final StreamExecutionEnvironment env;
     private final boolean isBlocking;
+    public static final String METADATA_KEY_OP_TS = "op_ts";
 
     public static FlinkPipelineComposer ofRemoteCluster(
             org.apache.flink.configuration.Configuration flinkConfig, List<Path> additionalJars) {
@@ -107,8 +108,13 @@ public class FlinkPipelineComposer implements PipelineComposer {
             DataSource dataSource =
                     sourceTranslator.createDataSource(sourceDef, env, pipelineDef.getConfig());
             if (opTsMetadataColumn == null) {
+                // When there are multiple source tables, all sink tables share the
+                // opTsMetadataColumn settings (e.g., the names of the columns holding the opTs
+                // information are the same among the sink tables)
                 for (SupportedMetadataColumn col : dataSource.supportedMetadataColumns()) {
-                    if ("op_ts".equals(col.getName())) {
+                    if (METADATA_KEY_OP_TS.equals(col.getName())) {
+                        // If source is configured to read op_ts metadata, an opTsMetadataColumn
+                        // will be added to the sink table to hold op_ts values
                         opTsMetadataColumn =
                                 new Tuple2<>(
                                         sourceDef
